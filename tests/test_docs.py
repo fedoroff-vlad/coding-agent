@@ -46,6 +46,35 @@ def test_code_blocks_are_kept_verbatim():
     assert "claimService.register(claim);" in examples.text
 
 
+def test_code_block_indentation_survives_the_whitespace_pass():
+    """Verbatim means the *shape* too — the whitespace pass is for prose, not for code.
+
+    The section text goes through a whitespace normaliser that collapses runs of spaces and tabs,
+    which is right for markup-exported prose and destructive for an example: a retrieved Java or
+    YAML block with its indentation flattened is no longer the convention's example. The fixture
+    was flat before this test, which is exactly why the defect shipped.
+    """
+    examples = next(s for s in parse("payments-rules.html") if s.heading_path[-1:] == ("Examples",))
+    assert "    claimService.register(claim);" in examples.text
+    assert "\n\n    DecisionServiceImpl" in examples.text  # a blank line inside the block survives
+
+
+def test_prose_around_a_code_block_is_still_normalised():
+    """Only the fenced span is held out — the paragraphs on either side still get cleaned."""
+    (got,) = docs.parse_markdown(
+        "spaced    prose\n\n```\n    indented\n```\n\nmore    prose\n"
+    )
+    assert "spaced prose" in got.text
+    assert "more prose" in got.text
+    assert "    indented" in got.text
+
+
+def test_an_unterminated_fence_keeps_its_indentation():
+    """A truncated example is still an example; falling back to cleaning would flatten it."""
+    (got,) = docs.parse_markdown("```java\nif (x) {\n    call();\n")
+    assert "    call();" in got.text
+
+
 def test_a_skipped_heading_level_nests_by_containment():
     """h1 -> h3 with no h2: the numbering lies, the path must still say what contains what."""
     sections = parse("skipped-levels.html")

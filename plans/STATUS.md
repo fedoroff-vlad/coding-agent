@@ -161,6 +161,20 @@ slice cost us to learn.
   from the *preceding* line lets a large line overlap a small one, and then the larger line's `top`
   is the smaller of the two — reading order silently reverses.
 
+- **Code blocks really are verbatim now (C-3 defect fix) — DONE.** `_clean` normalises whitespace so
+  an exported page's markup does not leak into the text; run over a whole section it also flattened
+  the **indentation of code blocks**, which D-1 promises to keep verbatim — a retrieved Java or YAML
+  example is the convention's example precisely because of its shape. `_clean_outside_fences` now
+  splits the section on fenced spans and cleans only the prose between them, reusing
+  `parse_markdown`'s fence scanner (closing run ≥ opening, so a fence can quote a fence) rather than
+  a second rule that could drift from it. The fence is the right boundary because **both** parsers
+  already mark code with one — `parse_html` wraps a `<pre>`, markdown arrives fenced. An
+  unterminated fence keeps its tail verbatim: a truncated example is still an example. **The fixture
+  was the reason this shipped** — its `<pre>` held two flush-left statements, so a flattening pass
+  was invisible; it now carries an indented, blank-line-containing block, and the three new tests
+  were verified to fail without the fix. Not fixed here and still true: `_split` cuts an oversized
+  section on `\n\n`, so a very large fenced block can still be split mid-fence.
+
 ## Next
 **Owner's call pending** between #1 and #2 below — both are ready to start, and #2 needs hardware we
 do not have here.
@@ -192,11 +206,7 @@ do not have here.
    per-stack plugins + the Java sidecar (C-8) → security hardening (C-9).
 
 ## Known defects (found, not yet fixed)
-- **`_clean` collapses whitespace inside code blocks.** D-1 promises code blocks survive *verbatim*,
-  but every section's text goes through `_clean`, whose `[ 	]+ → " "` rule flattens indentation.
-  A retrieved Java or YAML example therefore loses its structure. Pre-existing (D-1), inherited
-  unchanged by D-6's markdown path, and cheap to fix — the fenced spans need to be held out of the
-  whitespace pass — but it is a parser change with its own tests, not a rider on a format slice.
+- *(none — the `_clean`-flattens-code-blocks defect was fixed; see the slice above.)*
 
 ## Cross-repo pending (agreed, not yet done)
 These are chores in *other* repos that this repo's work created. They live here because nothing else

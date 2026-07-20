@@ -196,7 +196,7 @@ class _Builder:
         return self._sections
 
     def _flush(self) -> None:
-        text = _clean("\n\n".join(b for b in self._buf if b))
+        text = _clean_outside_fences("\n\n".join(b for b in self._buf if b))
         if text:
             level = self._levels[-1] if self._levels else 0
             self._sections.extend(
@@ -368,6 +368,43 @@ def _table_text(table: Tag) -> str:
 
 def _clean(text: str) -> str:
     return _BLANKS.sub("\n\n", _WS.sub(" ", text)).strip()
+
+
+def _clean_outside_fences(text: str) -> str:
+    """Normalise prose whitespace, leaving fenced code **verbatim**.
+
+    ``_clean`` exists to undo the whitespace an exported page's markup leaves behind, and for prose
+    that is right. For a code block it is destructive: indentation *is* the content, so a flattened
+    Java or YAML example is no longer the convention's example this module promises to preserve.
+    Both parsers mark code with a fence — :func:`parse_html` wraps a ``<pre>`` in one, and markdown
+    arrives fenced — so the fence is the one boundary this pass has to respect, and the scanner is
+    the same one :func:`parse_markdown` uses (a closing run at least as long as the opening one, so
+    a fence can quote a fence).
+
+    An unterminated fence keeps its tail verbatim rather than falling back to cleaning: a truncated
+    example is still an example, and guessing that the fence was really prose would flatten it.
+    """
+    parts: list[str] = []
+    buf: list[str] = []
+    fence: str | None = None
+
+    for line in text.splitlines():
+        opening = _MD_FENCE.match(line)
+        if fence is None:
+            if opening:
+                parts.append(_clean("\n".join(buf)))
+                buf, fence = [line], opening.group(1)
+            else:
+                buf.append(line)
+            continue
+        buf.append(line)
+        if opening and opening.group(1)[0] == fence[0] and len(opening.group(1)) >= len(fence):
+            parts.append("\n".join(buf))
+            buf, fence = [], None
+
+    tail = "\n".join(buf)
+    parts.append(tail.strip("\n") if fence is not None else _clean(tail))
+    return "\n\n".join(p for p in parts if p).strip()
 
 
 def is_linkable(symbol: str) -> bool:

@@ -13,7 +13,10 @@
   <tr><td>Manual correction</td><td>1 working day</td><td>operator</td></tr>
 </table>
 <h3>Examples</h3>
-<pre>claimService.register(claim);
-DecisionServiceImpl.decide(claim);</pre>
+<pre>if (claim.isRefund()) {
+    claimService.register(claim);
+
+    DecisionServiceImpl.decide(claim);
+}</pre>
 </div></div>
 </body></html>

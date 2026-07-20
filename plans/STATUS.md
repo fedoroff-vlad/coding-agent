@@ -211,13 +211,18 @@ do not have here.
 ## Cross-repo pending (agreed, not yet done)
 These are chores in *other* repos that this repo's work created. They live here because nothing else
 tracks them, and a cross-repo tail is exactly what gets dropped at the end of a session.
-- **ai-life: bump the `agent-skills` submodule.** `agent-skills` gained `add-observability` +
-  `new-golden` (agent-skills#5); coding-agent bumped in #34, **ai-life still points at the old
-  commit**, so those two skills are invisible there. One-line pointer change + PR.
-- **ai-life: enable branch protection on `main`.** coding-agent enforces it server-side (PR required,
-  required status check, force-push/deletion off, `enforce_admins=true`) after a direct push slipped
-  through on 2026-07-19. ai-life has the same "never commit to main" rule and **no enforcement**.
-  Needs the exact CI check name from ai-life's workflow before it can be set.
+- *(none open — both 2026-07-19 tails are closed; see below.)*
+
+**Closed 2026-07-20:**
+- **ai-life: bump the `agent-skills` submodule — DONE.** Verified rather than repeated: ai-life's
+  pointer is already at `1bc78e9`, the same commit coding-agent pins and `agent-skills`' own
+  `origin/main`, so all eleven skills (incl. `add-observability`, `new-golden`, `scrub-identity`)
+  are visible there. The entry was stale, not outstanding.
+- **ai-life: branch protection on `main` — DONE.** Enabled with coding-agent's exact shape: PR
+  required, `build & test` required **and** strict (up to date with `main`), force-push and deletion
+  off, `enforce_admins=true`. The check name is `build & test` — the job's `name:`, not its id, which
+  is why this needed reading ai-life's workflow first. Recorded in ai-life's `CLAUDE.md` §Branching
+  (ai-life#354), because a rule that is now enforced should not still read as honour-based.
 
 ## Infra
 - **Daily DB backups — DONE.** `db-backup` sidecar (`infra/docker-compose.yml`, OSS

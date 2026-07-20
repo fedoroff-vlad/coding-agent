@@ -1,0 +1,58 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Change-propagation drift-lint (CLAUDE.md §Change-propagation map). Fast, no venv —
+      # runs unconditionally, incl. docs-only PRs, so coupled artifacts can't drift apart.
+      - name: Consistency drift-lint
+        run: bash scripts/check-consistency.sh
+
+      # Docs-only PRs (*.md) skip the Python build but still report this check green.
+      # main always builds fully.
+      - name: Detect docs-only change
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] \
+             && ! git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -qvE '\.md$'; then
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+            echo "Docs-only change — skipping the Python build."
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install uv
+        if: steps.detect.outputs.docs_only != 'true'
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync (locked deps + dev/index extras)
+        if: steps.detect.outputs.docs_only != 'true'
+        run: uv sync --locked --extra dev --extra index --extra docs --extra cloud --python ${{ matrix.python-version }}
+
+      - name: Lint (ruff)
+        if: steps.detect.outputs.docs_only != 'true'
+        run: uv run ruff check .
+
+      - name: Test (pytest)
+        if: steps.detect.outputs.docs_only != 'true'
+        run: uv run pytest -q

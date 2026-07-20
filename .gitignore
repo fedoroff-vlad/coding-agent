@@ -1,0 +1,35 @@
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# Java / Maven
+target/
+*.class
+
+# Python (core: MCP server + indexer)
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Logs / scratch
+logs/
+*.log
+
+# Stray LLM notes from a dev enrich run against this repo (real targets commit these — Layer 1).
+.code-context/
+
+# DB backups (db-backup writes daily dumps here; keep the dir, ignore the dumps)
+infra/backups/*
+!infra/backups/.gitkeep

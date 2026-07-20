@@ -1,0 +1,60 @@
+[project]
+name = "code-context"
+version = "0.0.1"
+description = "code-context MCP server: RAG-first hands in the codebase for the coding-agent contour."
+requires-python = ">=3.13"
+dependencies = [
+    # mcp 1.x has broken across minors historically — cap the major; uv.lock pins the exact version.
+    "mcp>=1.2,<2",
+    "psycopg[binary]>=3.2",
+    "pydantic-settings>=2.3",
+    "httpx>=0.27",
+    "yoyo-migrations>=8.2",  # raw-SQL DB migrations over our psycopg3 (postgresql+psycopg://)
+]
+
+[project.optional-dependencies]
+# Indexer (parser facts + embeddings) — pulled in from phase C-2 onward.
+index = [
+    "tree-sitter>=0.23",
+    "tree-sitter-language-pack>=0.4",
+]
+# Docs ingest (C-3). bs4 on the stdlib html.parser backend — tolerant of real exported markup
+# without pulling a C extension; hand-rolling this is where the bugs would live.
+docs = [
+    "beautifulsoup4>=4.12",
+    "mammoth",
+    "markdownify",
+    "pdfplumber",
+]
+# Cloud analyzer tier (C-4 escalation): the official SDK, so credential resolution, retries and
+# typed errors are theirs, not ours. Only needed when a *_model is prefixed "anthropic:" — the
+# local-only path never imports it (llm.py imports it lazily, inside the cloud provider).
+cloud = ["anthropic>=0.69"]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+code-context = "code_context.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/code_context"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+# Every test lives in tests/ — collect only there. Without this, a bare `pytest` walks the whole
+# repo, including infra/backups/ (the db-backup sidecar's output: dated dumps plus a
+# *-latest.sql.gz symlink per tier). On Windows those symlinks abort collection outright
+# (OSError WinError 1920) — so the documented command failed on the dev box while CI, whose
+# checkout has no backups yet, stayed green. An explicit path argument still overrides this.
+testpaths = ["tests"]
+# Default/CI run excludes the golden lane (it needs a live Ollama + pgvector).
+# Run it explicitly: `uv run pytest -m golden` or scripts/golden.sh.
+addopts = "-m 'not golden'"
+markers = [
+    "golden: retrieval-quality checks against a real Ollama + pgvector (opt-in, not in unit CI)",
+]

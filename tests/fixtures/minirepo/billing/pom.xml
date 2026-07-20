@@ -1,0 +1,6 @@
+<!-- Marker only: makes `billing/` a build "module" so the rollup pass tags it kind='module'.
+     The indexer scans *.java, so this file is ignored by indexing — it exists purely for the
+     module-detection path in the golden rollup lane. -->
+<project>
+  <artifactId>billing</artifactId>
+</project>

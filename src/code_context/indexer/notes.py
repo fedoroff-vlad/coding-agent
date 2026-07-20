@@ -1,0 +1,132 @@
+"""LLM leaf notes — the class-level pass of index-time enrichment (roadmap C-4 / 0.2).
+
+A semantic note **on top of the parser facts**: the prompt is anchored to the real class + method
+signatures (from tree-sitter), so the analyzer describes intent without inventing symbols. Trivial
+classes (records, DTOs, accessor-only holders) stop at facts — we don't spend an LLM on them.
+
+This is the *leaf* of the bottom-up hierarchy (class → directory → module → project). The rollup
+tiers land in the next slice (C-4b); the disk layout and the fragment shape here are what they build on.
+
+Pure except :func:`generate_note` (the one LLM call): the gate, prompt, and markdown rendering are
+testable without a live engine.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+
+from .. import llm
+from ..config import settings
+from .java import FragmentData
+
+# Accessor / boilerplate methods that carry no design intent — a class made only of these is trivial.
+_ACCESSOR_RE = re.compile(r"\b(get|set|is)[A-Z0-9_]")
+_BOILERPLATE_NAMES = frozenset({"equals", "hashCode", "toString"})
+# A record-style accessor with no get/is/set prefix (e.g. ``amount()``): a one-line ``return field;``
+# body. Syntactic only (no type/field resolution — that's the Java sidecar, C-8), but it reliably
+# tells a field getter from real behavior like ``total()`` (whose body is more than a single return).
+_GETTER_BODY_RE = re.compile(r"\)\s*(?:throws [\w., ]+)?\{\s*return\s+[\w.]+\s*;\s*\}\s*$", re.DOTALL)
+
+_SYSTEM = (
+    "You are a senior Java engineer documenting a codebase for a retrieval index. Write terse, "
+    "factual notes anchored ONLY to the signatures you are given. If the purpose is unclear from "
+    "the signatures, say so plainly — never invent behavior, collaborators, or method effects."
+)
+
+
+@dataclass(frozen=True)
+class ClassUnit:
+    """A class fragment plus its own method fragments — the input to one leaf note."""
+
+    cls: FragmentData
+    methods: tuple[FragmentData, ...]
+
+
+def class_units(frags: list[FragmentData]) -> list[ClassUnit]:
+    """Group parser fragments into (class, its methods). Methods are matched by ``Type.method``."""
+    classes = {f.symbol: f for f in frags if f.kind == "class"}
+    methods: dict[str, list[FragmentData]] = {name: [] for name in classes}
+    for f in frags:
+        if f.kind == "method":
+            owner = f.symbol.rsplit(".", 1)[0]
+            if owner in methods:
+                methods[owner].append(f)
+    return [ClassUnit(cls, tuple(methods[name])) for name, cls in classes.items()]
+
+
+def _is_ctor(unit_symbol: str, method: FragmentData) -> bool:
+    return method.symbol.rsplit(".", 1)[-1] == unit_symbol.rsplit(".", 1)[-1]
+
+
+def _is_boilerplate(method: FragmentData) -> bool:
+    name = method.symbol.rsplit(".", 1)[-1]
+    return (
+        name in _BOILERPLATE_NAMES
+        or bool(_ACCESSOR_RE.search(method.signature))
+        or bool(_GETTER_BODY_RE.search(method.content))
+    )
+
+
+def substantive_methods(unit: ClassUnit) -> list[FragmentData]:
+    """Methods that carry design intent — dropping constructors and accessor/boilerplate."""
+    return [
+        m
+        for m in unit.methods
+        if not _is_ctor(unit.cls.symbol, m) and not _is_boilerplate(m)
+    ]
+
+
+def is_trivial(unit: ClassUnit) -> bool:
+    """A data carrier not worth an LLM note: a record, or a class with no substantive methods."""
+    if " record " in f" {unit.cls.signature} ":
+        return True
+    return not substantive_methods(unit)
+
+
+def build_prompt(unit: ClassUnit, path: str) -> str:
+    """A note prompt anchored to the real signatures (no free-floating names → no hallucination)."""
+    methods = substantive_methods(unit)
+    method_lines = "\n".join(f"- {m.signature}" for m in methods) or "- (none)"
+    return (
+        f"Class: {unit.cls.signature}\n"
+        f"File: {path}\n"
+        f"Methods:\n{method_lines}\n\n"
+        "Write a concise note (2-4 sentences, ~80 words max) covering: what this class is "
+        "responsible for, its key operations, and notable collaborators/dependencies where they "
+        "are evident from the signatures. Do not restate every method, do not speculate beyond "
+        "the signatures, output plain prose (no headings, no code fences).\n/no_think"
+    )
+
+
+def facts_key(unit: ClassUnit) -> str:
+    """A stable digest of what a note depends on: the analyzer model + class/method signatures.
+
+    Enrichment is incremental on *this*, not on the note body: if the signatures a class exposes are
+    unchanged, the note stays valid and we skip the LLM call ("a class changed → re-read the leaf").
+
+    The model is part of the key because it is part of the *output*: swapping analyzers must
+    re-generate the notes. Keying on signatures alone made a model swap a silent no-op — the run
+    reported everything skipped and left the previous model's notes in place.
+    """
+    sigs = sorted(m.signature for m in substantive_methods(unit))
+    return "\n".join([f"model={settings.notes_model}", unit.cls.signature, *sigs])
+
+
+def generate_note(unit: ClassUnit, path: str) -> str | None:
+    """The LLM call. Returns the note body, or ``None`` for a trivial class (facts only)."""
+    if is_trivial(unit):
+        return None
+    body = llm.generate(build_prompt(unit, path), system=_SYSTEM)
+    return body or None
+
+
+def note_markdown(unit: ClassUnit, path: str, body: str) -> str:
+    """The Layer-1 md artifact: the note anchored to its file/symbol/signature (git-trackable)."""
+    return (
+        f"# {unit.cls.symbol}\n\n"
+        f"- **file:** {path}:{unit.cls.line_start}\n"
+        f"- **signature:** `{unit.cls.signature}`\n"
+        f"- **kind:** llm-note (leaf/class)\n\n"
+        f"{body}\n"
+    )

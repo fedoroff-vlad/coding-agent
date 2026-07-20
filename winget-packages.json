@@ -1,0 +1,31 @@
+{
+	"$schema": "https://aka.ms/winget-packages.schema.2.0.json",
+	"Sources": [
+		{
+			"Packages": [
+				{ "PackageIdentifier": "Git.Git" },
+				{ "PackageIdentifier": "GitHub.cli" },
+				{ "PackageIdentifier": "astral-sh.uv" },
+				{ "PackageIdentifier": "Ollama.Ollama" },
+				{ "PackageIdentifier": "Docker.DockerDesktop" },
+				{ "PackageIdentifier": "Anthropic.ClaudeCode" },
+				{ "PackageIdentifier": "Microsoft.VisualStudioCode" },
+				{ "PackageIdentifier": "JetBrains.PyCharm.Professional" },
+				{ "PackageIdentifier": "JetBrains.DataGrip" },
+				{ "PackageIdentifier": "Postman.Postman" },
+				{ "PackageIdentifier": "Google.Chrome" },
+				{ "PackageIdentifier": "Yandex.Browser" },
+				{ "PackageIdentifier": "Telegram.TelegramDesktop" },
+				{ "PackageIdentifier": "SublimeHQ.SublimeText.4" },
+				{ "PackageIdentifier": "WireGuard.WireGuard" }
+			],
+			"SourceDetails": {
+				"Argument": "https://cdn.winget.microsoft.com/cache",
+				"Identifier": "Microsoft.Winget.Source_8wekyb3d8bbwe",
+				"Name": "winget",
+				"Type": "Microsoft.PreIndexed.Package"
+			}
+		}
+	],
+	"WinGetVersion": "1.29.280"
+}

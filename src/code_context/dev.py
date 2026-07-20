@@ -1,0 +1,142 @@
+"""Dev helper CLI — bring up / smoke-check the local infra before the real indexer exists.
+
+    python -m code_context.dev db-ping         # can we reach Postgres?
+    python -m code_context.dev migrate          # apply pending DB migrations (idempotent)
+    python -m code_context.dev embed-smoke       # can Ollama embed at the configured dim?
+    python -m code_context.dev index <repo-path> # index a Java repo into code.fragment
+    python -m code_context.dev enrich <repo-path> # LLM leaf notes over the facts (md + note fragments)
+    python -m code_context.dev rollup <repo-path> # bottom-up dir/module/project notes over the leaves
+    python -m code_context.dev ingest <docs-path> [repo]  # docs (HTML/.docx/.pdf) -> fragments (no LLM)
+    python -m code_context.dev link <repo>       # doc -> class 'mentions' edges (re-run after re-index)
+    python -m code_context.dev search <query>     # semantic search over the index
+
+Needs the dev DB up (infra/docker-compose.yml) and Ollama with the embed model pulled (``enrich`` /
+``rollup`` also need the notes / rollup model — CODE_CONTEXT_NOTES_MODEL / _ROLLUP_MODEL, e.g. qwen3:8b).
+"""
+
+from __future__ import annotations
+
+import sys
+
+from . import db, embeddings, obs, tools
+from .config import settings
+
+
+def db_ping() -> int:
+    with db.connect() as conn, conn.cursor() as cur:
+        cur.execute("SELECT 1")
+        cur.fetchone()
+    print(f"db ok: {settings.db_dsn}")
+    return 0
+
+
+def migrate() -> int:
+    applied = db.migrate()
+    with db.connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(*) FROM information_schema.tables WHERE table_schema = %s",
+            (settings.db_schema,),
+        )
+        (n,) = cur.fetchone()
+    print(f"migrate ok: applied {applied or '(up to date)'}; {n} tables in {settings.db_schema!r}")
+    return 0
+
+
+def embed_smoke() -> int:
+    v = embeddings.embed_one("hello world")
+    print(f"embed ok: model={settings.embed_model} dim={len(v)}")
+    return 0
+
+
+def index(repo_path: str) -> int:
+    from .indexer import index_repo
+
+    stats = index_repo(repo_path)
+    print(f"index ok: {stats}")
+    return 0
+
+
+def enrich(repo_path: str) -> int:
+    from .indexer import enrich_repo
+
+    stats = enrich_repo(repo_path)
+    print(f"enrich ok: {stats} (notes model={settings.notes_model})")
+    return 0
+
+
+def rollup(repo_path: str) -> int:
+    from .indexer import rollup_repo
+
+    stats = rollup_repo(repo_path)
+    print(f"rollup ok: {stats} (rollup model={settings.rollup_model})")
+    return 0
+
+
+def ingest(docs_path: str, repo: str | None = None) -> int:
+    from .indexer import ingest_docs
+
+    stats = ingest_docs(docs_path, repo)
+    print(f"ingest ok: {stats}")
+    return 0
+
+
+def link(repo: str) -> int:
+    from .indexer import link_docs
+
+    stats = link_docs(repo)
+    print(f"link ok: {stats}")
+    return 0
+
+
+def search(*query: str) -> int:
+    for f in tools.search_code(" ".join(query), limit=8):
+        print(f"{f['path']}:{f['line_start']}  {f['kind']} {f['symbol']}")
+    return 0
+
+
+def usages(symbol: str) -> int:
+    for u in tools.find_usages(symbol):
+        print(f"{u['path']}:{u['line']}  {u['symbol']}")
+    return 0
+
+
+def deps(symbol: str) -> int:
+    for f in tools.get_deps(symbol):
+        print(f"{f['path']}:{f['line_start']}  {f['kind']} {f['symbol']}")
+    return 0
+
+
+COMMANDS = {
+    "db-ping": db_ping,
+    "migrate": migrate,
+    "embed-smoke": embed_smoke,
+    "index": index,
+    "enrich": enrich,
+    "rollup": rollup,
+    "ingest": ingest,
+    "link": link,
+    "search": search,
+    "usages": usages,
+    "deps": deps,
+}
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if not argv or argv[0] not in COMMANDS:
+        print(f"usage: python -m code_context.dev {{{'|'.join(COMMANDS)}}} [args]", file=sys.stderr)
+        return 2
+    obs.setup()
+    command, args = argv[0], argv[1:]
+    try:
+        # Events go to stderr; the human summary each command prints stays on stdout, so a run
+        # stays readable while its event stream is redirected independently.
+        with obs.timed("run", command=command, target=args[0] if args else None):
+            return COMMANDS[command](*args)
+    except TypeError:
+        print(f"usage: python -m code_context.dev {command} <arg>", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

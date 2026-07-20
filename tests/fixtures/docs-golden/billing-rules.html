@@ -1,0 +1,16 @@
+<html><head><title>Billing rules</title></head>
+<body>
+<div class="wiki-content">
+<h1>Billing</h1>
+<p>How money owed by a customer is calculated and when it may be written off.</p>
+<h2>Invoice totals</h2>
+<p>Totals are summed by InvoiceService. Rounding is never applied per line — only once, at the end.</p>
+<table>
+  <tr><th>Case</th><th>Rule</th></tr>
+  <tr><td>Zero-amount line</td><td>Kept in the invoice, excluded from the total</td></tr>
+  <tr><td>Credit note</td><td>Recorded as a negative line, never as a separate document</td></tr>
+</table>
+<h2>Write-offs</h2>
+<p>A debt below the write-off threshold is closed automatically at the end of the quarter.</p>
+</div>
+</body></html>

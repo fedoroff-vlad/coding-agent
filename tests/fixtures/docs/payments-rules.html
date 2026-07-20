@@ -1,0 +1,19 @@
+<html><head><title>Payment rules</title><style>.x{color:red}</style></head>
+<body>
+<div class="wiki-content"><div class="inner">
+<h1>Payments</h1>
+<p>How payouts are handled across the platform.</p>
+<h2>Refunds</h2>
+<p>Refunds to customers. A claim becomes a decision, a decision becomes a payout.</p>
+<h3>Claim rules</h3>
+<p>Registration is handled by ClaimRegistrationService.</p>
+<table>
+  <tr><th>Case</th><th>Deadline</th><th>Owner</th></tr>
+  <tr><td>Standard case</td><td>5 working days</td><td>DecisionServiceImpl</td></tr>
+  <tr><td>Manual correction</td><td>1 working day</td><td>operator</td></tr>
+</table>
+<h3>Examples</h3>
+<pre>claimService.register(claim);
+DecisionServiceImpl.decide(claim);</pre>
+</div></div>
+</body></html>

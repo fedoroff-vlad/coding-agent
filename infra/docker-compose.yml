@@ -1,0 +1,58 @@
+# Isolated dev Postgres for code-context (option A): a throwaway pgvector instance, separate from
+# ai-life's DB so an experimental index never touches production data. Bring up:
+#   docker compose -f infra/docker-compose.yml up -d
+# Tear down (and wipe the volume):
+#   docker compose -f infra/docker-compose.yml down -v
+#
+# Host port 5433 (ai-life's PG owns 5432) → matches CODE_CONTEXT_DB_DSN in .env.example.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: code-context-db
+    environment:
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: code_context
+    ports:
+      - "5433:5432"
+    volumes:
+      - code-context-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev -d code_context"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Daily backups of the code-context DB (OSS prodrigestivill/postgres-backup-local): daily
+  # pg_dump + gzip into ./backups, rotated 7 daily + 4 weekly, no host cron — mirrors ai-life's
+  # postgres-backup sidecar so the mechanism is symmetric across both projects.
+  #
+  # NOTE — this index is a DERIVED, rebuildable index (REFERENCE §Storage: md/code is the source;
+  # `dev index` + `dev enrich` regenerate it), and in the shared-DB prod setup ai-life's own backup
+  # already covers schema `code.*`. So this sidecar matters for a STANDALONE coding-agent deployment
+  # (its own persistent DB) — for the throwaway dev flow (`down -v`) it's a convenience, not load-bearing.
+  db-backup:
+    image: prodrigestivill/postgres-backup-local:16
+    container_name: code-context-db-backup
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: code_context
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+      SCHEDULE: ${BACKUP_SCHEDULE:-@daily}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-7}
+      BACKUP_KEEP_WEEKS: ${BACKUP_KEEP_WEEKS:-4}
+      BACKUP_KEEP_MONTHS: ${BACKUP_KEEP_MONTHS:-0}
+      # gzip level 6, restore-friendly (drops objects first); no --schema filter → the whole DB.
+      POSTGRES_EXTRA_OPTS: ${BACKUP_EXTRA_OPTS:--Z6 --clean --if-exists}
+    volumes:
+      - ./backups:/backups
+
+volumes:
+  code-context-pgdata:

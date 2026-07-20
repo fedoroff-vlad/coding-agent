@@ -1,0 +1,78 @@
+# coding-agent change-map — drop this at the repo root as .skills/change-map.yaml
+# Derived from coding-agent/CLAUDE.md "Change-propagation map".
+version: 1
+couplings:
+  - id: ollama-model-tag
+    trigger: Changed an Ollama model / tag
+    must_update:
+      - scripts/pull-models.sh
+      - scripts/pull-models.ps1
+      - src/code_context/config.py   # embed_model, notes_model, rollup_model
+      - scripts/golden.sh
+      - scripts/golden.ps1
+      - README.md
+      - architecture.md
+    notes: >
+      Keep the .sh and .ps1 pairs in sync. The config.py default embed_model,
+      notes_model and rollup_model must each appear in the pull list.
+
+  - id: embedding-model-dimension
+    trigger: Changed the embedding model or its dimension
+    must_update:
+      - src/code_context/config.py            # embed_dim
+      - src/code_context/migrations/0001_initial_schema.sql   # vector(N)
+      - CODE_CONTEXT_EMBED_DIM
+    notes: Swapping the embed model changes both the dim and the vector column.
+
+  - id: new-mcp-tool-or-config-env
+    trigger: Added a new MCP tool or config env var
+    must_update:
+      - architecture.md
+      - README.md
+      - the tool's stub / impl
+      - .env.example            # every Settings field is env-settable → the template is the
+                                # only place an operator discovers the knob (drift-lint check 6)
+
+  - id: new-dependency
+    trigger: Added a new dependency
+    must_update:
+      - pyproject.toml
+      - uv.lock
+      - .github/workflows/ci.yml   # an OPTIONAL extra is only installed if `uv sync` names it
+    revalidate:
+      - uv sync --locked
+
+  - id: analyzer-provider
+    trigger: Added or changed an analyzer provider (the llm.py CLOUD_PREFIX routing)
+    must_update:
+      - src/code_context/llm.py
+      - scripts/check-consistency.sh   # is_cloud_model() — else the lint reads it as an Ollama tag
+      - .env.example
+      - architecture.md                # §Model use during indexing + the llm.py row
+      - README.md
+    notes: >
+      A provider is selected by a prefix on the model string, so every place that treats a model
+      string as an Ollama tag has to learn the prefix. The pull-list checks (4, 5) skip cloud
+      models; a provider the lint does not know would be reported as an un-pulled tag.
+
+  - id: docs-source-format
+    trigger: Added a document format to the docs ingest
+    must_update:
+      - src/code_context/indexer/__init__.py   # _DOC_SUFFIXES + the _parse_document dispatch
+      - src/code_context/indexer/docs.py       # the parser/converter for it
+      - pyproject.toml                         # the reader library, in the [docs] extra
+      - architecture.md                        # §Docs ingest
+      - README.md
+      - src/code_context/dev.py                # the `ingest` usage line
+    notes: >
+      The glob (_DOC_SUFFIXES) and the dispatch are separate reads of the same list — a format in
+      one but not the other is either silently skipped or crashes on an unknown suffix. Binary
+      formats convert to markdown and archive it as Layer 1; keep that seam rather than parsing
+      the binary straight to sections.
+
+  - id: skills-pointer
+    trigger: Changed the reusable-skills wiring
+    must_update:
+      - CLAUDE.md (Reusable dev-workflow skills block)
+      - .skills/change-map.yaml
+    notes: The tools/agent-skills pointer + index must exist and match across docs.

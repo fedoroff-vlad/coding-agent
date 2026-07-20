@@ -33,3 +33,7 @@ logs/
 # DB backups (db-backup writes daily dumps here; keep the dir, ignore the dumps)
 infra/backups/*
 !infra/backups/.gitkeep
+
+# Local denylist for tools/agent-skills/scripts/check-private-terms.* (scrub-identity).
+# A committed denylist names exactly what it hides — never track this file.
+.private-terms

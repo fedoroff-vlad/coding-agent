@@ -20,6 +20,12 @@ Portable skills shared with ai-life (source: github.com/fedoroff-vlad/agent-skil
 - `run-goldens` — run the golden lanes (`pytest -m golden`: retrieval / notes / rollup) against a real Ollama via `scripts/golden.{sh,ps1}` — all, or a subset (pass a test path / `-k`); reads real regression vs flaky borderline case.
 - `add-observability` — design logging for a new service/pass before wiring it: event vocabulary, sink, levels, and the never-log-payloads rule. Our `## Observability` contract is the reference implementation.
 - `new-golden` — decide unit-vs-golden and author a fixture that can actually *fail* (our small flat fixture is why three defects reached a real repo first).
+- `scrub-identity` — before recording WHOSE data a run was against (a client/employer repo name,
+  package path, or that industry's vocabulary in a "synthetic" fixture) in docs, commits, tests
+  or fixtures. Ships `check-private-terms.{sh,ps1}` — a local pre-commit check against a
+  gitignored `.private-terms`. This repo learned it the expensive way: it is public, it named a
+  third party's service, and because GitHub serves `refs/pull/<N>/head` forever, no force-push
+  could remove it — the repository had to be recreated.
 - `architecture-checkup` — audit the repo (or a change) against agent-engineering standards (manifests / SDD / TDD / drift / canon + security / runtime-hardware fit); emits a prioritized findings report. Find-only — hands fixes to `check-drift` / `new-module` / `new-skill`.
 
 The coupling table they consume lives at `.skills/change-map.yaml`.

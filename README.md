@@ -110,7 +110,10 @@ Phase-by-phase state: [`plans/roadmap.md`](plans/roadmap.md); slice-level detail
 - `src/code_context/migrations/` — raw-SQL schema migrations + [their own README](src/code_context/migrations/README.md)
   (the one rule that bites: a committed migration is never edited, comments included).
 - `infra/` — the dev pgvector container + the backup sidecar · `scripts/` — bootstrap, dev session,
+  the [work-machine quickstart](scripts/work-win.ps1) (infra + index + opencode wiring),
   model pulls, the golden runner, and the drift-lint CI step.
+- `tools/agent-skills/` — submodule of the portable dev-workflow skills; `work-win.ps1` installs
+  them into opencode, since it only reads `SKILL.md` from six fixed locations.
 
 ## Set up a new machine
 
@@ -153,29 +156,38 @@ repo (`.code-context/notes/`), and an internal hostname or a service name in a c
 fixture identifies an employer as surely as a name does. This repository already had to be
 recreated over exactly that — GitHub serves `refs/pull/<N>/head` forever, so no force-push undoes it.
 
+**Then one command** ([`scripts/work-win.ps1`](scripts/work-win.ps1)) — dev session (Docker, uv,
+Ollama, pgvector, migrations) → the embed model → index your repo → register the MCP server in
+opencode → install the dev-workflow skills. Idempotent; re-running is also how you refresh the
+skills after a submodule bump.
+
+```powershell
+.\scripts\work-win.ps1 -Repo C:\path\to\your\monorepo
+.\scripts\work-win.ps1 -Repo C:\path\to\repo -SkipIndex   # everything but the slow indexing
+.\scripts\work-win.ps1 -WireOnly                          # just opencode: re-register + refresh skills
+```
+
+It pulls **only `nomic-embed-text`** (~274 MB), not the analyzer models — a machine driving a
+company gateway needs none of them — and it never asks for that gateway's URL or key, because
+retrieval does not use one. It also **merges** into an existing `opencode.json` (backing it up
+first) rather than overwriting the provider config that makes your work model reachable; if you
+keep an `opencode.jsonc`, it prints the entry for you to paste instead, because an automatic
+rewrite would delete your comments.
+
+Windows only, deliberately — that is the work machine. The portable form is the same steps by hand:
+
 ```sh
-# 1. infra + env
 docker compose -f infra/docker-compose.yml up -d      # pgvector on :5433
 uv sync --extra dev --extra index --extra docs
 uv run python -m code_context.dev migrate
-ollama pull nomic-embed-text                          # embeddings only — small, CPU is fine
-
-# 2. index the repo you actually work in (no LLM involved)
+ollama pull nomic-embed-text
 uv run python -m code_context.dev index /path/to/your/repo
 uv run python -m code_context.dev search "where is the retry policy"
-
-# 3. (optional, later) semantic notes through the company gateway
-export CODE_CONTEXT_OPENAI_BASE_URL=https://<your-gateway>/v1   # keep this out of git
-export CODE_CONTEXT_OPENAI_API_KEY=...                          # env only, never a file in the repo
-export CODE_CONTEXT_NOTES_MODEL=openai:<model-the-gateway-exposes>
-uv run python -m code_context.dev enrich /path/to/your/repo
 ```
 
-Set `CODE_CONTEXT_DEFAULT_REPO` to that repo — one index can hold several, and an unscoped query
-mixes them, which is a wrong answer rather than a wide one.
-
-**Wire the MCP server into your shell.** Any MCP-capable shell works; the server is stdio and the
-console script is `code-context`. For an opencode-style config:
+plus this in `~/.config/opencode/opencode.json` (the shell then has `search_code` / `get_file` /
+`find_usages` / `get_deps` / `search_docs` / `find_convention` — a narrow slice of the codebase on
+demand instead of the whole repo in its window, which is the entire point):
 
 ```json
 {
@@ -192,9 +204,23 @@ console script is `code-context`. For an opencode-style config:
 }
 ```
 
-The shell then has `search_code` / `get_file` / `find_usages` / `get_deps` / `search_docs` /
-`find_convention` — a narrow slice of the codebase on demand instead of the whole repo in its
-window, which is the entire point (RAG-first, `plans/REFERENCE.md` §3).
+`CODE_CONTEXT_DEFAULT_REPO` matters: one index can hold several repos, and an unscoped query mixes
+them — a wrong answer rather than a wide one.
+
+**Skills.** opencode discovers `SKILL.md` only in six fixed locations, and a submodule under
+`tools/` is not one of them, so the skills in [`tools/agent-skills/`](tools/agent-skills) have to be
+*installed*: copy each `skills/<name>/` into `~/.config/opencode/skills/` (what the script does).
+Global rather than `.opencode/skills/` inside the work repo — they are your workflow, not that
+repository's, and they must not show up in its diff.
+
+**Semantic notes through the gateway (optional, later):**
+
+```sh
+export CODE_CONTEXT_OPENAI_BASE_URL=https://<your-gateway>/v1   # keep this out of git
+export CODE_CONTEXT_OPENAI_API_KEY=...                          # env only, never a file in the repo
+export CODE_CONTEXT_NOTES_MODEL=openai:<model-the-gateway-exposes>
+uv run python -m code_context.dev enrich /path/to/your/repo
+```
 
 **Analyzer tiers, for reference.** The model string picks the engine: a bare tag → local Ollama,
 `anthropic:…` → the Messages API (needs `--extra cloud`), `openai:…` → the OpenAI-dialect gateway

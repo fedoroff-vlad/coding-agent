@@ -12,11 +12,30 @@ Two contours share one Mac + one Ollama engine, never two 32B resident at once (
 - **coding-agent** (this repo) — the on-demand coding contour on `qwen3-coder:30b` (Qwen3-Coder-Flash).
 
 The model *switch* and hot/cold supervision live on the ai-life side (`../ai-life/plans/lifecycle.md`,
-slice LC-4). **Emitting the signal is ours — slice C-6a**, and it is not a footnote: on start we signal
-`coder-active` **before loading the coder model** and wait for ai-life's confirmed downshift; on stop /
-idle-timeout we unload our model, confirm it is gone, then signal `normal`. Loading first and signalling
-after would put ~39 GB of models resident at once and bust the ~48 GB ceiling. The whole coupling is
-**opt-in (default OFF)** and model tags come from env — either contour must run standalone unaffected.
+slice LC-4). **Emitting the signal is ours — slice C-6a, built** (`lifecycle.py`), and it is not a
+footnote: on start we signal `coder-active` **before loading the coder model** and wait for ai-life's
+confirmed downshift; on stop / idle-timeout we unload our model, confirm it is gone, then signal
+`normal`. Loading first and signalling after would put ~39 GB of models resident at once and bust the
+~48 GB ceiling. The whole coupling is **opt-in (default OFF)** and model tags come from env — either
+contour must run standalone unaffected.
+
+**As built (C-6a).** `lifecycle.acquire(model)` sits immediately before the local analyzer POST in
+`llm.py` — that POST *is* the load, so it is the last point at which the ordering can be honoured —
+and `lifecycle.release(reason)` runs at the end of a dev-CLI command, on an idle TTL, or from an
+`atexit` backstop. The wire is one endpoint, ai-life's `/v1/model-profile`, carrying
+`{"profile": "coder-active"|"normal"}`. Four properties are deliberate:
+
+- **A failed handshake fails the run.** No confirmation from ai-life (refusal, unreachable gateway,
+  or a 404 because *its* flag is off) raises `LifecycleError` and nothing is loaded — "carry on
+  anyway" is precisely the over-budget load. The mirror case, failing to *restore* ai-life
+  afterwards, leaves the box under budget, so it is logged (`restored=false`) rather than raised.
+- **The unload is confirmed, not assumed.** `keep_alive: 0` returns before the memory is actually
+  freed, so `/api/ps` is polled until the model is gone; if it never goes, `normal` is **not** sent.
+- **Only the analyzer is gated.** Embeddings (`nomic-embed-text`, a few hundred MB) do not move the
+  ceiling and gating them would make every `index` run wait on ai-life; the `anthropic:` cloud tier
+  loads nothing locally, so it never signals either.
+- **The session, not the call, is the unit.** One signal covers a whole enrich/rollup pass; the idle
+  TTL hands the engine back when the pass ends, and the next analyzer call re-acquires.
 
 ## The product: `code-context` MCP + indexer
 
@@ -66,6 +85,7 @@ context layers (REFERENCE §3, roadmap §Architecture):
 | `find_convention` · `search_docs` (docs corpus, provenance in the shape) · repo-scoped retrieval | ✅ built (C-3 / D-4) |
 | LLM **leaf** notes (per class, md-as-source → `note` fragment; trivial classes skipped) | ✅ built (C-4a) |
 | LLM note **rollups** (bottom-up directory→module→project, md-as-source → tier fragments) | ✅ built (C-4b) |
+| Lifecycle signal to ai-life (`coder-active` handshake + confirmed unload + idle TTL), opt-in | ✅ built (C-6a) |
 | Authored layer (`AGENTS.md` / OpenSpec) · agent-shell wiring · Java sidecar (type resolution) | ○ planned → C-7 / C-6 / C-8 |
 
 ### Package layout (`src/code_context/`)
@@ -78,6 +98,7 @@ context layers (REFERENCE §3, roadmap §Architecture):
 | `db/` | The derived index: `connect()` + `migrate()`. Schema evolves via raw-SQL **migrations** (`migrations/NNNN_*.sql`, yoyo over psycopg3 — see `migrations/README.md`): `code.fragment` = pgvector unit, `code.edge` = relation graph. |
 | `embeddings.py` | The only caller of the embed model (Ollama, `nomic-embed-text` → 768) + the pgvector literal helper. Swapping models is a config change. |
 | `llm.py` | The only caller of the **analyzer** model (the generative counterpart of `embeddings.py`). Two engines behind one `generate()`: local Ollama, or the **cloud tier** for a model prefixed `anthropic:` (C-4 escalation, official SDK, lazily imported from the `[cloud]` extra). The model string alone selects the engine — it already feeds the incremental keys, so a separate provider knob could drift under them. Strips the qwen3 `<think>` preamble locally and the `/no_think` directive on the way out. Swapping/escalating models is a config change. |
+| `lifecycle.py` | The C-6a handshake with ai-life over its `/v1/model-profile`: signal `coder-active` and wait for the confirmed downshift **before** the local analyzer model loads, unload + confirm + signal `normal` on release, idle TTL in between. Opt-in (`CODE_CONTEXT_LIFECYCLE_*`, default OFF) — with the flag off it makes no calls and this repo is standalone. Called from `llm.py` (acquire) and `dev.py` (release). |
 | `indexer/` | Builds the index from a repo. `java.py` = tree-sitter chunker (types + methods, exact names/lines) + `parse_edges` (imports/calls). `__init__.index_repo` walks `*.java` → embed → upsert `code.fragment` (incremental by hash) + rebuild `code.edge`. `notes.py` + `enrich_repo` = the C-4a leaf pass (a `note` per non-trivial class, anchored to real signatures). `rollup.py` + `rollup_repo` = the C-4b bottom-up pass: directory→module→project notes synthesized over the leaves (root → `project`, marker dir → `module`), incremental on each dir's input digest. **Pass-through directories are collapsed** (`collapse_chains`): a dir with no classes of its own and exactly one child costs an LLM call to restate its child, so the parent links straight through — except the root and module-marker dirs, whose tiers are meaningful. Deep Java packages make these chains the common case. `docs.py` + `ingest_docs` = the C-3 docs pass (exported HTML, `.docx` and `.pdf` → sections → `doc` fragments, no LLM; a binary format is converted to markdown and archived as Layer 1 first — D-6/D-7), and `link_docs` writes the doc→class `mentions` edges over the same `code.edge` table. |
 | `dev.py` | Dev CLI: `db-ping`/`migrate`/`embed-smoke` (infra) + `index`/`enrich`/`search`/`usages`/`deps` (drive the indexer). |
 
@@ -293,6 +314,9 @@ into unrelated documents.
 | `llm.generate` | `llm.py` | `provider` (`ollama` / `anthropic`), model, `prompt_chars`, `response_chars`, duration, outcome |
 | `llm.context_pressure` | `llm.py` | model, `prompt_chars`, `num_ctx`, estimated fill — **warn**, local tier only |
 | `embed.batch` | `embeddings.py` | model, `count`, duration |
+| `lifecycle.signal` | `lifecycle.py` | `profile` (`coder-active` / `normal`), gateway url, duration, outcome |
+| `lifecycle.unload` | `lifecycle.py` | model, duration (includes the `/api/ps` wait), outcome |
+| `lifecycle.release` | `lifecycle.py` | `reason` (`stop` / `idle` / `exit`), models, `restored` — **warn** when ai-life could not be restored |
 | `enrich.note` | `indexer/` | input `.java` name, symbol, output `.md` name, duration |
 | `enrich.skip` | `indexer/` | input name, reason (`trivial` / `unchanged`) |
 | `rollup.note` | `indexer/` | directory, tier kind, `children`, output name, duration |

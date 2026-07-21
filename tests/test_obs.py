@@ -27,8 +27,14 @@ def events(monkeypatch):
     handler = Capture()
     monkeypatch.setattr(logger, "handlers", [handler])
     monkeypatch.setattr(logger, "level", logging.DEBUG)
+    # `logging` caches the effective-level answer per logger, and only `setLevel` invalidates it.
+    # Setting `.level` directly (so monkeypatch can restore it) skips that, so a cache populated by
+    # any earlier test that emitted an event would silently swallow everything here — the fixture
+    # would capture nothing and the assertions would fail with no hint why. Clear it both ways.
+    logger._cache.clear()
     formatter = obs.JsonLinesFormatter()
     yield lambda: [json.loads(formatter.format(r)) for r in records]
+    logger._cache.clear()
 
 
 def test_event_carries_the_stable_field_set(events):

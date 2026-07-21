@@ -49,6 +49,12 @@ Plus the **cloud analyzer tier** (C-4 residue, now closed): prefix any analyzer 
 `anthropic:` and `llm.py` routes that call to the Messages API instead of Ollama, so the roadmap's
 strong rollup tier is a config change; defaults stay local because escalation bills per directory.
 
+Plus the **lifecycle signal to ai-life** (C-6a, `lifecycle.py`): signal `coder-active` and wait for
+the confirmed downshift **before** the local analyzer model loads; unload + confirm + signal `normal`
+on release (end of run / idle TTL / atexit). Opt-in, default OFF — with the flag off no call is made
+and either contour runs standalone. An unconfirmed downshift *fails* the run, so it stays off until
+ai-life ships `/v1/model-profile` (LC-4).
+
 **Next:** a semi-manual Step 0 on the owner's real Java monorepo (C-5 — needs the repo + Confluence),
 or first the golden-lane gaps the real-repo run exposed (needs a live model, so realistically the Mac).
 **Still open inside shipped phases:** OCR for scanned PDFs + Confluence REST sync + `AGENTS.md`
@@ -97,12 +103,23 @@ the right, and re-run the lint locally:
   `architecture.md` §Model use during indexing · `README.md`. Anything that treats a model string as
   an Ollama tag has to learn the prefix.
 
+- **The ai-life handshake** (`lifecycle.py` — profile names, endpoint path, the ordering) →
+  `tests/test_lifecycle.py` (the ordering *is* the contract) · `.env.example` · `architecture.md`
+  §Contours + the event vocabulary · `README.md` · **and the other side of the wire**:
+  `../ai-life/plans/lifecycle.md` §LC-4. This is the repo's only cross-repo contract, so a change
+  here is silent drift by default — nothing in this repo's CI can see ai-life. Record it in
+  `plans/STATUS.md` §Cross-repo pending in the same PR.
+
 Extend the lint whenever a new coupling is mechanically checkable (a stale ref a grep can catch) — that's
 how the "automat" grows instead of relying on memory. Mirrors ai-life's identical section.
 
 ## Relationship to ai-life
 Shares the Mac (64 GB) with ai-life 24/7. The ai-life model swap (`qwen3:32b` ↔ `qwen3:14b` during a coding
 session) lives in ai-life's `llm-gateway` (slice LC-4, `../ai-life/plans/lifecycle.md`). **Emitting the
-signal is ours — slice C-6a** (opt-in, default OFF; flag + gateway URL + idle TTL from env). Order is
-load-bearing: signal `coder-active` → wait for ai-life's *confirmed* downshift → only then load the coder
-model; on stop/idle unload ours, confirm, then signal `normal`. Either contour must run standalone.
+signal is ours — slice C-6a, built** in [`lifecycle.py`](src/code_context/lifecycle.py) (opt-in, default
+OFF; flag + gateway URL + idle TTL from env). Order is load-bearing: signal `coder-active` → wait for
+ai-life's *confirmed* downshift → only then load the coder model; on stop/idle unload ours, confirm, then
+signal `normal`. Either contour must run standalone. **Touching that ordering means touching
+`tests/test_lifecycle.py`** — the ordering is the contract, and it lives in the suite, not in a comment.
+ai-life's endpoint is not built yet; an absent one reads as a refusal *by design*, so the flag stays off
+until LC-4 ships.

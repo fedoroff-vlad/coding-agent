@@ -10,6 +10,10 @@ the model already feeds the incremental keys (``notes.facts_key`` / ``rollup.inp
 provider on a separate knob could change underneath them and re-use stale notes silently, which is
 exactly the defect the first real-repo run surfaced.
 
+Being the one place a local analyzer model is loaded also makes this the one place the **lifecycle
+handshake** belongs (C-6a): :func:`code_context.lifecycle.acquire` runs immediately before the local
+POST and nowhere else — the cloud tier loads nothing on the shared Mac, so it never signals.
+
 The pipeline stays model-agnostic (REFERENCE §4.2): richness varies, not whether it runs. Thinking
 models (qwen3) emit a ``<think>…</think>`` preamble; we suppress it (``/no_think`` + strip) so
 callers get just the note, not the reasoning.
@@ -23,7 +27,7 @@ import re
 
 import httpx
 
-from . import obs
+from . import lifecycle, obs
 from .config import settings
 
 _THINK_BLOCK = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
@@ -88,6 +92,9 @@ def _generate_ollama(
     if system is not None:
         payload["system"] = system
 
+    # Before the POST, because the POST is what loads the model: on a shared Mac ai-life must have
+    # finished downshifting first (C-6a). A no-op unless the lifecycle flag is on.
+    lifecycle.acquire(model)
     obs.check_context_pressure(len(prompt), num_ctx, model)
     with obs.timed(
         "llm.generate",

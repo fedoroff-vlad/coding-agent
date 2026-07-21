@@ -1,9 +1,9 @@
 # STATUS — coding-agent (update at the end of each PR)
 
-**Where we are (2026-07-20):** phases **C-0…C-4 shipped**, **C-3 closed** — the index, the graph, the
-LLM notes and the docs corpus all run end to end, and no MCP tool is a stub. **Not started:** the
-onboarding kit (C-5), the agent shell (C-6 + the C-6a lifecycle signal), the SDD layer (C-7), the Java
-sidecar (C-8), security hardening (C-9). **Open inside shipped phases:** the docs front reads only a
+**Where we are (2026-07-21):** phases **C-0…C-4 shipped**, **C-3 closed** — the index, the graph, the
+LLM notes and the docs corpus all run end to end, and no MCP tool is a stub. **C-6a (the lifecycle
+signal to ai-life) is built**, ahead of C-6. **Not started:** the onboarding kit (C-5), the agent
+shell (C-6), the SDD layer (C-7), the Java sidecar (C-8), security hardening (C-9). **Open inside shipped phases:** the docs front reads only a
 Confluence HTML export (Opus rollup escalation closed 2026-07-20). Phase table with state:
 [roadmap.md](roadmap.md). The bullets below are the slice-level record — what shipped and what each
 slice cost us to learn.
@@ -175,6 +175,36 @@ slice cost us to learn.
   were verified to fail without the fix. Not fixed here and still true: `_split` cuts an oversized
   section on `\n\n`, so a very large fenced block can still be split mid-fence.
 
+- **Lifecycle signal to ai-life (C-6a) — DONE.** `lifecycle.py`: the coder-side half of ai-life's
+  LC-4. `acquire(model)` sits immediately before the local analyzer POST in `llm.py` — that POST
+  *is* the load, so it is the last point at which the ordering can still be honoured — signals
+  `coder-active` to ai-life's `/v1/model-profile` and **waits for the confirmed downshift**;
+  `release(reason)` unloads our model (`keep_alive: 0`), polls `/api/ps` until it is really gone,
+  and only then signals `normal`. Wired to the end of a dev-CLI command, an idle TTL, and an
+  `atexit` backstop. **Opt-in, default OFF** (`CODE_CONTEXT_LIFECYCLE_*`) — with the flag off not
+  one HTTP call is made and either project runs standalone, which is the whole point of the
+  add-on framing on both sides.
+  **Built before C-6 deliberately:** the slice was filed under "the shell's session lifecycle", but
+  the thing that actually loads a 30B model on the shared Mac today is the *analyzer* pass, so the
+  ceiling is at risk with or without a shell — and `llm.py` is a far more honest home for the
+  handshake than a shell adapter would be (one choke point, cloud calls excluded for free, and the
+  gate cannot be bypassed by a future caller).
+  **The asymmetry is the design:** failing to get a *confirmed downshift* raises and loads nothing
+  (carrying on is the over-budget load the mechanism exists to prevent); failing to *restore*
+  ai-life afterwards leaves the box under budget, so it is logged (`restored=false`), not raised.
+  Same reason `keep_alive: 0` is not treated as proof — it returns before the memory is freed.
+  Embeddings are **not** gated (nomic is a few hundred MB and gating it would make every `index`
+  run wait on ai-life) and the `anthropic:` tier loads nothing locally, so it never signals.
+  11 unit tests own the **ordering** rather than the plumbing (LC-4 makes it a correctness
+  requirement, so the guarantee belongs in the suite): signal-before-load, refusal/unreachable →
+  nothing loaded, unload→confirm→restore, an unconfirmed eviction never signalling `normal`.
+  Verified they can fail by moving `acquire` after the POST (3 red). **Not yet driven against a
+  live gateway** — ai-life's endpoint does not exist yet (LC-4), and by design an absent endpoint
+  reads as a refusal, so the flag stays off until it ships.
+  *Bycatch:* `tests/test_obs.py`'s capture fixture set `logger.level` directly, which skips
+  `setLevel`'s cache invalidation — so the first test module to emit an event before it silently
+  blanked its captures. Fixed in the fixture; it was latent, not new.
+
 ## Next
 **Owner's call pending** between #1 and #2 below — both are ready to start, and #2 needs hardware we
 do not have here.
@@ -202,8 +232,8 @@ do not have here.
    pages into thin `AGENTS.md` conventions (roadmap 0.3 — that one *is* model work and belongs with
    C-7's authored layer). None of it blocks the next phase.
 5. **Then the unstarted phases in roadmap order:** shell integration (C-6, still an open decision
-   between Aider / Continue / Cline) + the lifecycle signal to ai-life (C-6a) → SDD wiring (C-7) →
-   per-stack plugins + the Java sidecar (C-8) → security hardening (C-9).
+   between Aider / Continue / Cline; the C-6a signal it was to carry is already built) → SDD wiring
+   (C-7) → per-stack plugins + the Java sidecar (C-8) → security hardening (C-9).
 
 ## Known defects (found, not yet fixed)
 - *(none — the `_clean`-flattens-code-blocks defect was fixed; see the slice above.)*
@@ -211,7 +241,14 @@ do not have here.
 ## Cross-repo pending (agreed, not yet done)
 These are chores in *other* repos that this repo's work created. They live here because nothing else
 tracks them, and a cross-repo tail is exactly what gets dropped at the end of a session.
-- *(none open — both 2026-07-19 tails are closed; see below.)*
+- **ai-life: record that LC-4's caller now exists (and build the endpoint).** `plans/lifecycle.md`
+  §LC-4 says the coder-side hook is orphaned and that LC-4 is "not done-in-effect until that
+  counterpart lands" — it has landed (C-6a above), so that paragraph is now stale. ai-life still
+  owes the `/v1/model-profile` endpoint itself. **The contract our caller assumes**, worth writing
+  down before it is built: a **2xx is the confirmation** (answer only once the outgoing model has
+  actually left Ollama, per LC-4's own acceptance criterion), any other status — including the 404
+  when `LLM_MODEL_PROFILE_ENABLED` is off — reads as a refusal and *fails* the coder run rather
+  than letting it load over the ceiling. Body: `{"profile": "coder-active"|"normal"}`.
 
 **Closed 2026-07-20:**
 - **ai-life: bump the `agent-skills` submodule — DONE.** Verified rather than repeated: ai-life's

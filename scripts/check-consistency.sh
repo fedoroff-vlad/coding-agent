@@ -99,6 +99,24 @@ for f in $fields; do
   fi
 done
 
+# ── Check 7: the ai-life handshake vocabulary must be documented ───────────────────────
+# lifecycle.py speaks a contract owned jointly with ANOTHER repo (ai-life LC-4): the endpoint
+# path and the two profile names. Neither repo's CI can see the other, so architecture.md is the
+# only place this side's half is written down — renaming a profile and leaving the doc behind
+# would strand the other end. Backticked form, so the generic word "normal" can't pass by
+# accident in prose.
+echo "check 7: lifecycle.py's endpoint + profile names appear in architecture.md"
+LC="src/code_context/lifecycle.py"
+terms="$( { grep -oE '/v1/[a-z-]+' "$LC"; \
+            grep -oE '^(CODER_ACTIVE|NORMAL) *= *"[^"]+"' "$LC" | sed 's/.*"\([^"]*\)".*/\1/'; \
+          } | sort -u )"
+for t in $terms; do
+  if ! grep -qF -- "\`$t\`" architecture.md; then
+    err "lifecycle contract term '$t' is not documented in architecture.md"
+    err "→ add it (backticked) to §Contours, and mirror the change in ../ai-life/plans/lifecycle.md"
+  fi
+done
+
 echo ""
 if [ "$fail" -ne 0 ]; then
   echo "consistency check FAILED — resolve the ✗ items above." >&2

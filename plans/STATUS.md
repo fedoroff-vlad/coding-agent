@@ -280,9 +280,11 @@ do not have here.
    against an in-repo tesseract dependency when it comes; Confluence **REST sync** instead of a manual export (roadmap decision B); distilling
    pages into thin `AGENTS.md` conventions (roadmap 0.3 — that one *is* model work and belongs with
    C-7's authored layer). None of it blocks the next phase.
-5. **Then the unstarted phases in roadmap order:** shell integration (C-6, still an open decision
-   between Aider / Continue / Cline; the C-6a signal it was to carry is already built) → SDD wiring
-   (C-7) → per-stack plugins + the Java sidecar (C-8) → security hardening (C-9).
+5. **Then the unstarted phases in roadmap order:** C-6 is **partly done** — the shell is decided
+   (**opencode**, decision D closed 2026-07-21) and wired (`scripts/work-win.ps1`), and the C-6a
+   signal it was to carry shipped earlier; what is left of it is the *Mac* profile (opencode against
+   the local `qwen3-coder:30b`), which needs the Mac. Then SDD wiring (C-7) → per-stack plugins +
+   the Java sidecar (C-8) → security hardening (C-9).
 
 ## Known defects (found, not yet fixed)
 - *(none — the `_clean`-flattens-code-blocks defect was fixed; see the slice above.)*
@@ -321,8 +323,9 @@ tracks them, and a cross-repo tail is exactly what gets dropped at the end of a 
   so it's mainly for a standalone deploy. Off-site replication deferred.
 
 ## Open decisions (closed within slices; full list — [roadmap.md](roadmap.md))
-Embeddings (leaning Ollama-local) · Confluence ingest (manual → API) · shell choice (Aider/Continue/Cline,
-evaluated in C-6).
+Embeddings (leaning Ollama-local) · Confluence ingest (manual → API). **Shell choice closed
+2026-07-21 — opencode** (roadmap §Open decisions D: chosen by adoption, and it satisfies the three
+things we actually need — OpenAI dialect, local MCP servers, `SKILL.md`).
 
 ## Reminder
 All repository `.md` are English; localization via optional `.ru.md` for user-facing content. One PR = one

@@ -87,9 +87,11 @@ caller of ai-life's `/v1/model-profile` (its slice LC-4, shipped 2026-07-21), so
 exist** — enable the two flags together, because ai-life only steps down when asked and an
 unconfirmed downshift deliberately **fails** the run instead of loading over the ceiling.
 
-**What is deliberately not built yet:** the agent shell (C-6 — Aider/Continue/Cline still to be
-chosen), the Step-0 onboarding kit (C-5), the authored `AGENTS.md`/OpenSpec layer (C-7), and the Java
-sidecar that would replace simple-name matching (C-8).
+**The shell is [opencode](https://opencode.ai)** (C-6, decided 2026-07-21) — reused, not built. This
+repo is its MCP server; `scripts/work-win.ps1` registers it and installs the skills.
+
+**What is deliberately not built yet:** the Step-0 onboarding kit (C-5), the authored
+`AGENTS.md`/OpenSpec layer (C-7), and the Java sidecar that would replace simple-name matching (C-8).
 Inside shipped phases one thing stays open: the docs front reads an exported corpus (HTML, `.docx`
 and text-layer `.pdf`; OCR for scans and Confluence REST sync deferred) rather than syncing
 Confluence itself. Analyzer escalation now ships as a config change — the model string picks the engine: `anthropic:…`

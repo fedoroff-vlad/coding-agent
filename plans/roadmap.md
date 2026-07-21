@@ -18,12 +18,12 @@ any project ("Step 0") + the continuous SDD work cycle + the phases of building 
   model-agnostic, **local-first**, tier 32B (leaf) / Opus (rollup); trivial classes — facts only.
 - **Storage:** **md is the source (Layer 1), the DB (pgvector+AGE) is a derived index.** Shared ai-life
   Postgres, schema `code.*`.
-- **Strategy:** **reuse** the agent shell (Aider/Continue/Cline) + **build** the RAG-MCP; SDD basis
+- **Strategy:** **reuse** the agent shell (**opencode**, decision D closed 2026-07-21) + **build** the RAG-MCP; SDD basis
   (agents.md + OpenSpec), the kit's ready-made prompts; all agent-facing content in English.
 - **Onboarding any project** = Step 0 (0.1–0.5), a universal core + per-stack plugins.
 
-Open (closed within slices): embeddings (leaning Ollama-local), Confluence ingest (manual → API), the shell
-choice (evaluated in C-6).
+Open (closed within slices): embeddings (leaning Ollama-local), Confluence ingest (manual → API).
+The shell choice is **closed — opencode** (decision D below).
 
 ## Two entities (don't conflate)
 1. **The product** (built once): the project-knowledge RAG-MCP + a reused agent shell + per-stack
@@ -45,7 +45,7 @@ choice (evaluated in C-6).
    authoritative, ALWAYS loaded.
 2. **RAG (machine-built, our MCP):** code + full Confluence → a relation graph → pulled as a narrow slice on
    demand.
-3. **Shell (reuse):** Aider/Continue/Cline, Ask/Edit/Agent modes; model — local 32B by day / Opus for
+3. **Shell (reuse):** **opencode**; model — local 32B by day / Opus for
    indexing + hard tasks.
 
 ---
@@ -97,7 +97,7 @@ column honest at every slice closer — a roadmap that says less than STATUS is 
 | **C-3** | Docs/Confluence indexer + linking doc-rule ↔ code | ✅ done (D-1…D-7, #36–#39, #44, #45) | Exported corpus: HTML + `.docx` + text-layer `.pdf` (binaries converted to markdown and archived as Layer 1). OCR for scans, Confluence REST sync, and LLM distillation into `AGENTS.md` (0.3) deliberately deferred |
 | **C-4** | Index-time enrichment (Opus): the 0.2 analysis as an automated pass → summaries/relations | ✅ done (C-4a + C-4b + escalation) | "pay once for quality". Leaf notes + bottom-up rollups default to local; escalating a tier is a **config change** — prefix the model `anthropic:` (`[cloud]` extra) and `llm.py` routes it to the Messages API. Not yet driven against the live API |
 | **C-5** | Onboarding kit: package Step 0 (0.1–0.5) into a runnable sequence / skills | ○ next up | makes onboarding a new project a command. Needs the owner's real monorepo + Confluence access |
-| **C-6** | Shell integration: wire the reused agent (evaluate Aider vs Continue vs Cline) → MCP + Ollama + Opus escalation | ○ planned | the shell choice is still an open decision |
+| **C-6** | Shell integration: wire the reused agent (**opencode**) → MCP + the analyzer tiers | ◐ partly done | **Decision D closed: opencode.** The wiring ships in `scripts/work-win.ps1` (MCP registration + skills install + the README runbook). What remains is the *Mac* profile — opencode against the local `qwen3-coder:30b` — which needs the Mac |
 | **C-6a** | **Lifecycle signal to ai-life** (opt-in, default OFF): on session start signal `coder-active` **before** loading the coder model and wait for ai-life's confirmed downshift; on stop / idle-timeout unload the coder model, confirm it is gone, then signal `normal`. Flag + gateway URL + idle TTL from env. | ✅ done | `lifecycle.py` + the ordering suite. The coder-side half of ai-life LC-4 — without it the shared 64 GB box busts its ceiling. Built **before** C-6 on purpose: the analyzer passes already load a 30B model, so the ceiling is at risk with or without a shell. Inert until ai-life ships the `/v1/model-profile` endpoint (unconfirmed = the run fails, by design) |
 | **C-7** | SDD-workflow wiring: OpenSpec in-repo + the apply/archive loop + reindex-on-archive | ○ planned | also where the authored `AGENTS.md` layer joins `find_convention` as a *trusted* source |
 | **C-8** | Per-stack plugins/skills: Java/Spring/gRPC/GraphQL/Camunda enrichers + skills (`add-graphql-resolver`, `write-camunda-process`, `platform-config-module`) | ○ planned | also the real fix for simple-name matching in `find_usages` / doc linking |
@@ -113,7 +113,15 @@ project without a plugin still onboards on the generic RAG, just shallower.
   minimum rather than top-k similar. The heart of "small context → a competent answer".
 - **B. Confluence ingest** — manual export/drop first, later a REST API sync.
 - **C. DB** — shared ai-life Postgres (schema `code.*`) vs separate. Leaning shared.
-- **D. Shell** — Aider vs Continue vs Cline (evaluated in C-6).
+- **D. Shell — CLOSED 2026-07-21: opencode.** Chosen by adoption rather than by a head-to-head
+  bake-off, and worth being honest about that: the owner rolled it out on the work machine against
+  the company LLM gateway, so it is the shell this project is actually used from. It also happens to
+  satisfy the three things we need and Aider/Continue/Cline were only ever candidates for:
+  it speaks the **OpenAI dialect** (so it reaches that gateway), it launches **local MCP servers**
+  over stdio (so `code-context` plugs straight in), and it reads **`SKILL.md`** (so the
+  `agent-skills` submodule is usable — with the caveat that it only discovers skills in six fixed
+  locations, hence the install step in `scripts/work-win.ps1`). Being OSS, it keeps the
+  reuse-don't-rebuild rule intact. Revisit only if one of those three stops being true.
 - **E. Embeddings** — local Ollama (`nomic-embed-text`/`bge-m3`) vs a dedicated model.
 - **F. Community-clustering layer (deferred, evaluate-later).** An **embedding-free** pass that clusters the
   existing `code.edge` graph into topological communities (Leiden via `graspologic` / `python-igraph`) and

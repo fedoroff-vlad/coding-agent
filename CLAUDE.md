@@ -71,8 +71,9 @@ distillation (C-3 residue). Live detail → `plans/STATUS.md` (the source of tru
 
 ## Conventions
 - **SDD basis (target — lands in C-7, not in the repo yet):** agents.md + OpenSpec + the kit's ready-made prompts (`github.com/sipki-tech/ai-coding-workflow-kit`). `AGENTS.md` / OpenSpec are the authored Layer-1 slice still marked `○ planned → C-7` in [`architecture.md`](architecture.md) §Status — don't go looking for them yet.
-- **Reuse > rebuild:** reuse the agent shell (Aider/Continue/Cline); build only the differentiator — a RAG
-  over code + Confluence.
+- **Reuse > rebuild:** reuse the agent shell — **opencode** (decision D, closed 2026-07-21); build only
+  the differentiator — a RAG over code + Confluence. Anything the shell already does (edit loop, diffs,
+  provider config) is not ours to build.
 - **Tooling:** Python core + an optional Java sidecar. Models: local-first, tier 32B (leaf) / Opus (rollup).
 - One PR = one small vertical slice. Spec before code.
 - **Never commit to `main` — branch, PR, green CI, squash-merge. No exceptions.** This is enforced

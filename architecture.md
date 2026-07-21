@@ -46,7 +46,9 @@ context layers (REFERENCE §3, roadmap §Architecture):
    thin, authoritative, always loaded.
 2. **RAG (machine-built — this component):** code + docs → a derived pgvector + edge-graph index,
    pulled as a narrow slice on demand.
-3. **Shell (reused):** Aider/Continue/Cline drives the loop (wired in C-6).
+3. **Shell (reused):** **opencode** drives the loop — decision D, closed 2026-07-21 (roadmap
+   §Open decisions). It is registered as an MCP client of this server; see
+   [`scripts/work-win.ps1`](scripts/work-win.ps1) and README §Use it on a work machine.
 
 ### Data flow (current)
 

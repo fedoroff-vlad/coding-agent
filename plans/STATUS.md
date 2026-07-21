@@ -205,6 +205,31 @@ slice cost us to learn.
   `setLevel`'s cache invalidation — so the first test module to emit an event before it silently
   blanked its captures. Fixed in the fixture; it was latent, not new.
 
+- **OpenAI-dialect analyzer tier + the work-machine runbook — DONE.** A third engine behind
+  `llm.generate`: prefix a model `openai:` and the call goes to `CODE_CONTEXT_OPENAI_BASE_URL` as a
+  `/chat/completions` — i.e. **a company LLM gateway**, one URL and one key fronting several models.
+  Hand-rolled over httpx instead of the OpenAI SDK (one non-streaming POST; a work machine should
+  not need an extra installed to reach its own gateway), so the `[cloud]` extra stays
+  Anthropic-only. **The key is env-only and deliberately not a `Settings` field** — a secret in the
+  settings singleton is one `print(settings)` from a log; a test asserts no settings field name
+  contains "key". `openai_suppress_thinking` sends `reasoning_effort: none` (off by default, since
+  a gateway that rejects unknown fields would fail every call) — ai-life's hard-won lesson that the
+  qwen `/no_think` tag does nothing over an OpenAI `/v1` endpoint. Drift-lint's `is_cloud_model`
+  learned the prefix, or checks 4/5 would read it as an un-pulled Ollama tag. 5 new routing tests,
+  verified red without the branch.
+  **The runbook is the other half of the slice** (README §Use it on a work machine), and it exists
+  because the useful discovery is what you *don't* need: retrieval — `index`, all four code tools,
+  the docs ingest — touches **no analyzer at all**, only embeddings, so a work machine is productive
+  before any gateway is configured. Embeddings deliberately stay on local `nomic-embed-text`:
+  moving them remote changes `embed_dim` *and* `vector(N)`, i.e. a migration plus a full re-index.
+  Step 0 of the runbook is `scrub-identity` + `.private-terms`, because indexing an employer's repo
+  writes notes into it and this public repo has already been recreated once over exactly that.
+  **Driven live** — not against the corporate gateway (it is behind that network), but against a
+  real OpenAI-dialect server: **Ollama's own `/v1`**, which is the same dialect and cost nothing to
+  point at. Body shape, response parsing and `<think>`-stripping all hold, and the suppression flag
+  measured **33.5 s → 3.7 s** on `qwen3:8b` for the same one-word answer — which also came back
+  clean instead of trailing a stray `/think`. That local `/v1` is the standing smoke for this tier.
+
 ## Next
 **Owner's call pending** between #1 and #2 below — both are ready to start, and #2 needs hardware we
 do not have here.

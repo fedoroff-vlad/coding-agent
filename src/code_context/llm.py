@@ -4,8 +4,10 @@ The generative counterpart of :mod:`code_context.embeddings`: the one place that
 *analyzer* model, so swapping models (or escalating leaf→rollup to a stronger tier) is a config
 change, not a code change. Model + URL come from :mod:`code_context.config`.
 
-**Which engine runs is carried by the model string itself** (``anthropic:claude-opus-4-8`` → the
-cloud tier; any other value → local Ollama). One string, not a second `*_provider` setting, because
+**Which engine runs is carried by the model string itself** — ``anthropic:claude-opus-4-8`` → the
+Messages API, ``openai:<model>`` → an OpenAI-dialect endpoint (a company gateway; the dialect
+ai-life calls ``openai-compatible``), anything else → local Ollama. One string, not a `*_provider`
+setting, because
 the model already feeds the incremental keys (``notes.facts_key`` / ``rollup.inputs_digest``) — a
 provider on a separate knob could change underneath them and re-use stale notes silently, which is
 exactly the defect the first real-repo run surfaced.
@@ -23,6 +25,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import os
 import re
 
 import httpx
@@ -35,6 +38,17 @@ _THINK_BLOCK = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
 #: Model-string prefix that routes a call to the cloud tier (roadmap: Opus for rollups).
 #: A prefix rather than "contains a colon" — Ollama tags are ``name:tag`` themselves.
 CLOUD_PREFIX = "anthropic:"
+
+#: Model-string prefix for an OpenAI-dialect endpoint — in practice a company's own gateway,
+#: which typically fronts several models (chat + embedding) on one URL behind one key. Hand-rolled
+#: over httpx rather than pulling the OpenAI SDK: it is a single non-streaming POST, and keeping it
+#: dependency-free means the work machine needs no extra installed to use its own gateway.
+OPENAI_PREFIX = "openai:"
+
+#: Where the key for that endpoint is read from. **Environment only, never a Settings field**: the
+#: settings object is the sort of thing that gets printed while debugging, and a secret in it is
+#: one ``print(settings)`` away from a log. Read per call, held nowhere.
+OPENAI_KEY_ENV = "CODE_CONTEXT_OPENAI_API_KEY"
 
 #: Engine-specific directive our prompts carry for the local thinking models. It is meaningless
 #: to the cloud tier (which returns reasoning as separate blocks), so it is stripped there rather
@@ -66,6 +80,13 @@ def generate(
             prompt,
             system=system,
             model=effective_model[len(CLOUD_PREFIX) :],
+            timeout_s=effective_timeout,
+        )
+    if effective_model.startswith(OPENAI_PREFIX):
+        return _generate_openai(
+            prompt,
+            system=system,
+            model=effective_model[len(OPENAI_PREFIX) :],
             timeout_s=effective_timeout,
         )
     return _generate_ollama(
@@ -111,6 +132,59 @@ def _generate_ollama(
         )
         resp.raise_for_status()
         text = strip_think(resp.json().get("response", "")).strip()
+        ev["response_chars"] = len(text)
+    return text
+
+
+def _generate_openai(prompt: str, *, system: str | None, model: str, timeout_s: int) -> str:
+    """An OpenAI-dialect endpoint: one non-streaming ``POST /chat/completions``.
+
+    Built for a company gateway reached over the corporate network, so nothing here is
+    provider-specific beyond the dialect: the base URL, the model name and the key are all
+    deployment facts. No local model is loaded, so this path never signals the lifecycle
+    handshake, and ``num_ctx`` (an Ollama knob) is not sent — the server owns its window, which
+    is also why the local ``llm.context_pressure`` warn cannot apply here.
+    """
+    base = settings.openai_base_url.rstrip("/")
+    if not base:
+        raise RuntimeError(
+            f"an '{OPENAI_PREFIX}' model needs CODE_CONTEXT_OPENAI_BASE_URL "
+            "(the gateway's OpenAI-dialect root, including /v1)"
+        )
+    messages: list[dict[str, str]] = []
+    if system is not None:
+        messages.append({"role": "system", "content": system})
+    # The qwen-specific tail is meaningless over this dialect — and worse than meaningless: it
+    # does not suppress thinking here (that is what openai_suppress_thinking is for), so shipping
+    # it would just be literal noise at the end of every prompt.
+    messages.append({"role": "user", "content": _LOCAL_DIRECTIVE.sub("", prompt)})
+
+    body: dict[str, object] = {
+        "model": model,
+        "messages": messages,
+        "stream": False,
+        "temperature": 0.2,  # same deterministic-ish notes the local tier asks for
+    }
+    if settings.openai_suppress_thinking:
+        body["reasoning_effort"] = "none"
+
+    key = os.environ.get(OPENAI_KEY_ENV, "")
+    headers = {"Authorization": f"Bearer {key}"} if key else {}
+
+    with obs.timed(
+        "llm.generate",
+        logging.DEBUG,
+        provider="openai",
+        model=model,
+        prompt_chars=len(prompt),  # size only — the prompt itself is never logged
+    ) as ev:
+        resp = httpx.post(
+            f"{base}/chat/completions", json=body, headers=headers, timeout=timeout_s
+        )
+        resp.raise_for_status()
+        choice = resp.json()["choices"][0]["message"].get("content") or ""
+        # A thinking model may still hand back a <think> block inline; strip it like the local tier.
+        text = strip_think(choice).strip()
         ev["response_chars"] = len(text)
     return text
 

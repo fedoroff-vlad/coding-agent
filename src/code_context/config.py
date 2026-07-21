@@ -71,6 +71,26 @@ class Settings(BaseSettings):
     # this file the only readable form of the document is rows in the index. Same rule as notes_root.
     docs_md_root: str = ""
 
+    # Lifecycle signal to ai-life (C-6a). The two contours share one Mac and one Ollama, and the
+    # GPU working set tops out around 48 GB — so before this repo loads its coder model, ai-life
+    # must have *finished* downshifting its own. Opt-in and OFF by default: either contour has to
+    # run standalone unaffected, and switching this on is a statement that both are co-resident.
+    lifecycle_enabled: bool = False
+    # ai-life's llm-gateway, which owns the model profile (its LC-4 /v1/model-profile endpoint).
+    # Published on the host at 8081 by ai-life's compose, so the default is the same-Mac case.
+    lifecycle_gateway_url: str = "http://localhost:8081"
+    # How long to wait for ai-life to confirm the downshift. It has to evict a 32B model, so this
+    # is a model-unload budget, not an HTTP round trip. A timeout FAILS the call: proceeding would
+    # load our model on top of theirs, which is the exact crash the handshake exists to prevent.
+    lifecycle_signal_timeout_s: int = 180
+    # How long to wait for OUR model to actually leave Ollama on the way back down, before we let
+    # ai-life restore its big one. Same reasoning, mirrored.
+    lifecycle_unload_timeout_s: int = 120
+    # Release the shared engine after this long with no analyzer call — an indexing run that ended
+    # (or a shell left open overnight) should not hold ai-life on the small model forever. The next
+    # analyzer call re-acquires. 0 disables the timer (release then only happens at run end).
+    lifecycle_idle_ttl_s: int = 900
+
     # Observability (architecture.md §Observability). Events go to stderr — stdout is the MCP
     # protocol channel. Level changes how MUCH is logged (INFO = run start/finish + counts +
     # warnings; DEBUG adds per-node events), never WHETHER payloads are: prompts, class bodies and

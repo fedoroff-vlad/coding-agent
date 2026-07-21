@@ -64,8 +64,8 @@ From a fresh clone:
 
 ## Status
 
-**Phases C-0…C-4 shipped; C-3 (docs) closed. Next: the onboarding kit (C-5) and shell integration
-(C-6).** Foundation + working indexer (facts + graph) + LLM notes (leaf + rollups) + the docs corpus.
+**Phases C-0…C-4 shipped; C-3 (docs) closed; the ai-life lifecycle signal (C-6a) built. Next: the
+onboarding kit (C-5) and shell integration (C-6).** Foundation + working indexer (facts + graph) + LLM notes (leaf + rollups) + the docs corpus.
 The `code-context` MCP
 server (`src/code_context/`), the derived-index schema (`code.*` — pgvector `fragment` + relation
 `edge`), a **Java indexer** (tree-sitter chunk → nomic embeddings → pgvector + call/import/contains
@@ -77,9 +77,18 @@ md-as-source → retrievable fragments (trivial data carriers skipped). Proven o
 `platform/memory-service` (202 fragments, 1168 edges) and on a 143-file production repo. **AGE decided
 against on data** — every graph tool is a 1-hop join, so plain `code.edge` suffices.
 
+**Sharing the Mac with ai-life (C-6a).** Both contours use one Ollama, and the GPU working set tops
+out near 48 GB, so before this repo loads its analyzer model ai-life must have *finished*
+downshifting its own — and on the way back we unload ours, confirm it is gone, and only then let
+ai-life restore. That handshake ships as `src/code_context/lifecycle.py`, **opt-in and OFF by
+default** (`CODE_CONTEXT_LIFECYCLE_ENABLED=true` + `CODE_CONTEXT_LIFECYCLE_GATEWAY_URL`): with the
+flag off this repo never talks to ai-life at all, and either project runs standalone. It is the
+caller of ai-life's `/v1/model-profile` (its slice LC-4) — turn it on only once that endpoint exists,
+since an unconfirmed downshift deliberately **fails** the run instead of loading over the ceiling.
+
 **What is deliberately not built yet:** the agent shell (C-6 — Aider/Continue/Cline still to be
-chosen), the Step-0 onboarding kit (C-5), the authored `AGENTS.md`/OpenSpec layer (C-7), the Java
-sidecar that would replace simple-name matching (C-8), and the lifecycle signal to ai-life (C-6a).
+chosen), the Step-0 onboarding kit (C-5), the authored `AGENTS.md`/OpenSpec layer (C-7), and the Java
+sidecar that would replace simple-name matching (C-8).
 Inside shipped phases one thing stays open: the docs front reads an exported corpus (HTML, `.docx`
 and text-layer `.pdf`; OCR for scans and Confluence REST sync deferred) rather than syncing
 Confluence itself. Rollup escalation now ships — prefix a model with `anthropic:`

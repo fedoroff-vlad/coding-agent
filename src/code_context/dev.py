@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import sys
 
-from . import db, embeddings, obs, tools
+from . import db, embeddings, lifecycle, obs, tools
 from .config import settings
 
 
@@ -136,6 +136,17 @@ def main(argv: list[str] | None = None) -> int:
     except TypeError:
         print(f"usage: python -m code_context.dev {command} <arg>", file=sys.stderr)
         return 2
+    finally:
+        # An `enrich`/`rollup` run is exactly the long occupation of the shared engine the C-6a
+        # handshake exists for, so hand it back at the end of the command rather than waiting out
+        # the idle TTL. A no-op unless the lifecycle flag is on and something was acquired;
+        # lifecycle's own atexit hook covers entry points that never reach here.
+        try:
+            lifecycle.release("stop")
+        except Exception as exc:
+            # Never let the handback mask the command's own outcome — a raise in `finally`
+            # replaces the real error. It is already an ERROR event; this is the human line.
+            print(f"lifecycle: {exc}", file=sys.stderr)
 
 
 if __name__ == "__main__":

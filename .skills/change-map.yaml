@@ -70,6 +70,24 @@ couplings:
       formats convert to markdown and archive it as Layer 1; keep that seam rather than parsing
       the binary straight to sections.
 
+  - id: ai-life-lifecycle-handshake
+    trigger: Changed the C-6a handshake (lifecycle.py — profile names, endpoint, ordering, flags)
+    ssot: src/code_context/lifecycle.py
+    must_update:
+      - tests/test_lifecycle.py    # the ordering IS the contract — assert it, don't comment it
+      - .env.example
+      - architecture.md            # §Contours (as-built) + the event vocabulary
+      - README.md
+      - plans/STATUS.md            # §Cross-repo pending — the other side cannot see this diff
+      - ../ai-life/plans/lifecycle.md   # §LC-4, the other end of the wire (a DIFFERENT repo/PR)
+    notes: >
+      The only cross-repo contract this repo has. No CI on either side can see the other, so the
+      halves drift silently by default: ours is the caller, ai-life's /v1/model-profile is the
+      endpoint, and a 2xx is the *confirmation* that its model is evicted — not an ack. Anything
+      else (including the 404 when ai-life's own flag is off) must keep reading as a refusal that
+      fails the coder run; "carry on anyway" is the over-budget load the handshake exists to
+      prevent.
+
   - id: skills-pointer
     trigger: Changed the reusable-skills wiring
     must_update:

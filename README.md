@@ -83,8 +83,9 @@ downshifting its own — and on the way back we unload ours, confirm it is gone,
 ai-life restore. That handshake ships as `src/code_context/lifecycle.py`, **opt-in and OFF by
 default** (`CODE_CONTEXT_LIFECYCLE_ENABLED=true` + `CODE_CONTEXT_LIFECYCLE_GATEWAY_URL`): with the
 flag off this repo never talks to ai-life at all, and either project runs standalone. It is the
-caller of ai-life's `/v1/model-profile` (its slice LC-4) — turn it on only once that endpoint exists,
-since an unconfirmed downshift deliberately **fails** the run instead of loading over the ceiling.
+caller of ai-life's `/v1/model-profile` (its slice LC-4, shipped 2026-07-21), so **both halves now
+exist** — enable the two flags together, because ai-life only steps down when asked and an
+unconfirmed downshift deliberately **fails** the run instead of loading over the ceiling.
 
 **What is deliberately not built yet:** the agent shell (C-6 — Aider/Continue/Cline still to be
 chosen), the Step-0 onboarding kit (C-5), the authored `AGENTS.md`/OpenSpec layer (C-7), and the Java

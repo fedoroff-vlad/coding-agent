@@ -241,14 +241,18 @@ do not have here.
 ## Cross-repo pending (agreed, not yet done)
 These are chores in *other* repos that this repo's work created. They live here because nothing else
 tracks them, and a cross-repo tail is exactly what gets dropped at the end of a session.
-- **ai-life: record that LC-4's caller now exists (and build the endpoint).** `plans/lifecycle.md`
-  §LC-4 says the coder-side hook is orphaned and that LC-4 is "not done-in-effect until that
-  counterpart lands" — it has landed (C-6a above), so that paragraph is now stale. ai-life still
-  owes the `/v1/model-profile` endpoint itself. **The contract our caller assumes**, worth writing
-  down before it is built: a **2xx is the confirmation** (answer only once the outgoing model has
-  actually left Ollama, per LC-4's own acceptance criterion), any other status — including the 404
-  when `LLM_MODEL_PROFILE_ENABLED` is off — reads as a refusal and *fails* the coder run rather
-  than letting it load over the ceiling. Body: `{"profile": "coder-active"|"normal"}`.
+- *(none open — the LC-4 tail closed the same day; see below.)*
+
+**Closed 2026-07-21:**
+- **ai-life: the `/v1/model-profile` endpoint — DONE** (ai-life#355, its slice LC-4). Both halves of
+  the handshake now exist, so the pair may run together on the Mac **with both flags on**. It
+  honours what our caller assumes: a **2xx means the outgoing model has actually left Ollama** (the
+  endpoint polls `/api/ps` before answering), and every other status — including the 404 you get
+  with `LLM_MODEL_PROFILE_ENABLED` off — stays a refusal. Verified live there (`qwen3:8b` ⇄
+  `qwen2.5:7b`, a real swap in ~10 s), which is the wait a coder session pays at start and at stop.
+  ai-life's stale "the caller is orphaned" note is retired in the same PR.
+  **Still ours and not yet done:** driving *our* side against that live gateway — `lifecycle.py`
+  has only ever talked to a stub. It is a two-flag, one-command check once both run on one box.
 
 **Closed 2026-07-20:**
 - **ai-life: bump the `agent-skills` submodule — DONE.** Verified rather than repeated: ai-life's

@@ -230,6 +230,30 @@ slice cost us to learn.
   measured **33.5 s → 3.7 s** on `qwen3:8b` for the same one-word answer — which also came back
   clean instead of trailing a stray `/think`. That local `/v1` is the standing smoke for this tier.
 
+- **Work-machine quickstart + opencode wiring — DONE.** `scripts/work-win.ps1`: one command from a
+  clean work box to a shell with hands in the codebase — dev session (delegated to `start-win.ps1`
+  rather than duplicated) → **only** `nomic-embed-text` (not `pull-models.ps1`: a machine driving a
+  company gateway needs no analyzer model, and the difference is ~274 MB vs tens of GB) → index the
+  target repo → register the `code-context` MCP server in opencode → install the skills.
+  `-WireOnly` skips the infrastructure half, which is both the "refresh my skills" mode and what
+  makes the risky half testable without Docker.
+  **Two things the research changed.** opencode discovers `SKILL.md` in **six fixed locations only**
+  — no configurable path, no documented symlink support — so a submodule under `tools/` is invisible
+  to it and the skills must be *installed* (copied to `~/.config/opencode/skills/`, global rather
+  than into the work repo, where they would show up in someone else's diff). And the MCP config
+  lands in a file that **already holds the provider config for the work model**, so the script
+  merges into it (with a backup) instead of writing it, and refuses to touch an `opencode.jsonc`
+  at all — machine-rewriting JSONC deletes the comments — printing the entry to paste instead.
+  **Verified here** against a redirected `XDG_CONFIG_HOME`: fresh-create, merge (provider, model
+  and a foreign MCP entry all survive), re-run idempotency, the JSONC branch leaving the file
+  untouched, no UTF-8 BOM (PowerShell 5.1's default writer emits one and it trips strict JSON
+  parsers), and 11 skills installed with their `SKILL.md`. Caught two of my own bugs on the way:
+  `-notmatch` on a string array filters rather than returning a boolean (so the "model already
+  pulled" check was always true), and `\"` does not escape a quote in PowerShell.
+  **Not verified end-to-end**: the infrastructure half — Docker on this VDI wedged mid-session
+  (`docker ps` itself stopped responding after the full Testcontainers `verify`), so steps 1–3 have
+  only ever run as `start-win.ps1`, which is unchanged and was already in use.
+
 ## Next
 **Owner's call pending** between #1 and #2 below — both are ready to start, and #2 needs hardware we
 do not have here.

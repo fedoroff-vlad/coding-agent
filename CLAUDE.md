@@ -121,5 +121,5 @@ OFF; flag + gateway URL + idle TTL from env). Order is load-bearing: signal `cod
 ai-life's *confirmed* downshift → only then load the coder model; on stop/idle unload ours, confirm, then
 signal `normal`. Either contour must run standalone. **Touching that ordering means touching
 `tests/test_lifecycle.py`** — the ordering is the contract, and it lives in the suite, not in a comment.
-ai-life's endpoint is not built yet; an absent one reads as a refusal *by design*, so the flag stays off
-until LC-4 ships.
+ai-life's `/v1/model-profile` shipped 2026-07-21 (its LC-4), so **both halves now exist** — turn the flag
+on only together with ai-life's `LLM_MODEL_PROFILE_ENABLED`, since it only steps down when asked.

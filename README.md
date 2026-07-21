@@ -92,9 +92,10 @@ chosen), the Step-0 onboarding kit (C-5), the authored `AGENTS.md`/OpenSpec laye
 sidecar that would replace simple-name matching (C-8).
 Inside shipped phases one thing stays open: the docs front reads an exported corpus (HTML, `.docx`
 and text-layer `.pdf`; OCR for scans and Confluence REST sync deferred) rather than syncing
-Confluence itself. Rollup escalation now ships — prefix a model with `anthropic:`
-(`CODE_CONTEXT_ROLLUP_MODEL=anthropic:claude-opus-4-8` + `uv sync --extra cloud`) and that tier runs
-on the Messages API instead of Ollama; the defaults stay local, since escalation costs per directory.
+Confluence itself. Analyzer escalation now ships as a config change — the model string picks the engine: `anthropic:…`
+runs on the Messages API (`uv sync --extra cloud`), `openai:…` on an **OpenAI-dialect company
+gateway** (`CODE_CONTEXT_OPENAI_BASE_URL`, no extra needed — see §Use it on a work machine), and a
+bare tag stays on local Ollama, which is still the default.
 Phase-by-phase state: [`plans/roadmap.md`](plans/roadmap.md); slice-level detail:
 [`plans/STATUS.md`](plans/STATUS.md).
 
@@ -133,6 +134,84 @@ installs tools only.
 ```
 
 A dev session = ollama + dev pgvector + uv env + schema, ready for `uv run code-context`.
+
+## Use it on a work machine (a company LLM + your own shell)
+
+The shell is not ours (C-6 — reuse, don't rebuild), so the setup is: **your shell holds the company
+model; this repo gives that shell hands in the codebase over MCP.** Two facts make this cheap:
+
+- **Retrieval needs no LLM at all.** `index`, `search_code`, `get_file`, `find_usages`, `get_deps`
+  and the whole docs ingest use *embeddings only*. You can be productive before any analyzer model
+  is configured — the semantic notes (`enrich` / `rollup`) are an upgrade, not a prerequisite.
+- **Embeddings stay local** (`nomic-embed-text`, 274 MB, fine on CPU). Swapping the embed model to
+  a remote one changes `embed_dim` *and* the `vector(N)` column, i.e. a migration and a full
+  re-index — not a price worth paying to get started.
+
+**0. Before you index a work repository, read [`scrub-identity`](tools/agent-skills/skills/scrub-identity/SKILL.md)
+and fill in `.private-terms`.** This repo is public. Indexing writes markdown notes into the target
+repo (`.code-context/notes/`), and an internal hostname or a service name in a commit, doc or
+fixture identifies an employer as surely as a name does. This repository already had to be
+recreated over exactly that — GitHub serves `refs/pull/<N>/head` forever, so no force-push undoes it.
+
+```sh
+# 1. infra + env
+docker compose -f infra/docker-compose.yml up -d      # pgvector on :5433
+uv sync --extra dev --extra index --extra docs
+uv run python -m code_context.dev migrate
+ollama pull nomic-embed-text                          # embeddings only — small, CPU is fine
+
+# 2. index the repo you actually work in (no LLM involved)
+uv run python -m code_context.dev index /path/to/your/repo
+uv run python -m code_context.dev search "where is the retry policy"
+
+# 3. (optional, later) semantic notes through the company gateway
+export CODE_CONTEXT_OPENAI_BASE_URL=https://<your-gateway>/v1   # keep this out of git
+export CODE_CONTEXT_OPENAI_API_KEY=...                          # env only, never a file in the repo
+export CODE_CONTEXT_NOTES_MODEL=openai:<model-the-gateway-exposes>
+uv run python -m code_context.dev enrich /path/to/your/repo
+```
+
+Set `CODE_CONTEXT_DEFAULT_REPO` to that repo — one index can hold several, and an unscoped query
+mixes them, which is a wrong answer rather than a wide one.
+
+**Wire the MCP server into your shell.** Any MCP-capable shell works; the server is stdio and the
+console script is `code-context`. For an opencode-style config:
+
+```json
+{
+  "mcp": {
+    "code-context": {
+      "type": "local",
+      "command": ["uv", "run", "--directory", "/path/to/coding-agent", "code-context"],
+      "environment": {
+        "CODE_CONTEXT_DEFAULT_REPO": "/path/to/your/repo",
+        "CODE_CONTEXT_DB_DSN": "postgresql://dev:dev@localhost:5433/code_context"
+      }
+    }
+  }
+}
+```
+
+The shell then has `search_code` / `get_file` / `find_usages` / `get_deps` / `search_docs` /
+`find_convention` — a narrow slice of the codebase on demand instead of the whole repo in its
+window, which is the entire point (RAG-first, `plans/REFERENCE.md` §3).
+
+**Analyzer tiers, for reference.** The model string picks the engine: a bare tag → local Ollama,
+`anthropic:…` → the Messages API (needs `--extra cloud`), `openai:…` → the OpenAI-dialect gateway
+above (no extra needed). Only the local tier signals the ai-life lifecycle handshake, because only
+it loads a model onto the shared machine.
+
+You can smoke-test the `openai:` path with no gateway at all — Ollama speaks the same dialect:
+
+```sh
+CODE_CONTEXT_OPENAI_BASE_URL=http://localhost:11434/v1 \
+  uv run python -c "from code_context import llm; print(llm.generate('say PONG', model='openai:qwen3:8b'))"
+```
+
+If your gateway fronts a *thinking* model, set `CODE_CONTEXT_OPENAI_SUPPRESS_THINKING=true` — a
+note is two sentences and the reasoning pass otherwise dominates it (measured on the command above:
+33.5 s → 3.7 s). It is off by default because a gateway that rejects unknown body fields would fail
+every call.
 
 ## Develop
 

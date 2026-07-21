@@ -45,6 +45,19 @@ class Settings(BaseSettings):
     # (CPU-only) engine, which kills the run exactly at the most valuable tier.
     rollup_num_ctx: int = 32768
     rollup_timeout_s: int = 900
+    # OpenAI-dialect tier: any analyzer model prefixed "openai:" is sent to this base URL as a
+    # /chat/completions call. Written for a company's own gateway (one URL, several models behind
+    # it) — the same dialect ai-life calls "openai-compatible". Must include the version prefix,
+    # e.g. https://llm.example.internal/v1.
+    # The API KEY IS DELIBERATELY NOT A SETTING — see llm.py: it is read from the environment at
+    # call time so a secret never lands in this object, which is one print(settings) from a log.
+    openai_base_url: str = ""
+    # Send "reasoning_effort": "none" on every OpenAI-dialect call. A thinking model (qwen3 and
+    # kin) otherwise spends the whole budget reasoning about a two-sentence note. ai-life paid to
+    # learn that the "/no_think" prompt tag does NOT work through an OpenAI /v1 endpoint — only
+    # this body field does (platform/llm-gateway/README.md §LLM_SUPPRESS_THINKING). Off by
+    # default: a gateway that rejects unknown fields would fail every call.
+    openai_suppress_thinking: bool = False
     # Output ceiling for the cloud tier (an "anthropic:" model). A note is a few sentences, but
     # adaptive thinking draws from the same budget, so this is sized for the reasoning, not the
     # prose. The local tier has no equivalent knob — there the window (num_ctx) is the limit.

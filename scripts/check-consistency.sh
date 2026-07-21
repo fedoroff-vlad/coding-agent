@@ -19,10 +19,11 @@ err() { echo "  ✗ $*" >&2; fail=1; }
 # Model-tag families we care about (prefix-match so "qwen3-coder:30b" etc. are caught).
 TAG_RE='(qwen|nomic-embed-text|minicpm|bge|llama|deepseek|codellama|starcoder)[A-Za-z0-9._:-]*'
 
-# A model routed to the cloud tier instead of Ollama (llm.py CLOUD_PREFIX). Such a model is never
-# pulled, so the "must be in the pull list" checks below skip it. Keep the prefixes in sync with
-# llm.py — a provider the lint doesn't know would be reported as an un-pulled Ollama tag.
-is_cloud_model() { case "$1" in anthropic:*) return 0 ;; *) return 1 ;; esac; }
+# A model routed to a REMOTE engine instead of Ollama (llm.py CLOUD_PREFIX / OPENAI_PREFIX). Such
+# a model is never pulled, so the "must be in the pull list" checks below skip it. Keep the
+# prefixes in sync with llm.py — a provider the lint doesn't know would be reported as an
+# un-pulled Ollama tag, which is the drift, not the fix.
+is_cloud_model() { case "$1" in anthropic:*|openai:*) return 0 ;; *) return 1 ;; esac; }
 
 # ── Check 1: the two pull-models scripts must declare the SAME model set ───────────────
 # pull-models.sh and pull-models.ps1 duplicate the list by hand → classic drift: add a

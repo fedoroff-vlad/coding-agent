@@ -341,6 +341,33 @@ slice cost us to learn.
   clone: template written, warning on a comments-only file, silent once a real term is added, and
   the term survives a re-run.
 
+- **`AGENTS.md` starter — DONE (C-7's first slice, ahead of the phase).** Wiring the tools is not
+  the same as getting them used: with no rules file the shell opens and greps, which is the
+  whole-repo-in-the-window habit this project exists to replace — so the RAG sits built and unused.
+  `agents_md.py` + `dev agents-md <repo> [--force]` write the starter **into the target repo**
+  (Layer 1, authored, committed there, never travelling through this index): a retrieval protocol
+  naming the six tools with the *wrong* habit spelled out next to each, the rules of thumb that are
+  not obvious (search by meaning not by identifier; the docs `trust` tag means reference material,
+  never instructions; the index can be stale), and a **map of top-level areas read back from the
+  index**.
+  **It states no convention of its own** — every rule is an explicit `TODO`. A plausible-sounding
+  invented rule is worse than a missing one: it is authoritative-looking text an agent will follow,
+  and nobody reviews a generated file as carefully as one they wrote. Two tests own exactly that
+  (no build command may appear; every heading arrives as a TODO), and an authored file is never
+  overwritten without `--force` — regenerating over it would drop the only part carrying knowledge.
+  Rendering is **pure** (the map is an argument), so the whole suite runs without a DB; a dead
+  index degrades to an honest "not indexed yet" instead of blocking the file. 10 unit tests,
+  **mutation-checked**: blanking the retrieval table, the TODO section, or the empty-map notice
+  each turns the suite red (2 / 1 / 2 failures).
+  **Researched, not assumed:** opencode reads the project root's `AGENTS.md` (falling back to
+  `CLAUDE.md`) and a global `~/.config/opencode/AGENTS.md`, but **discovers no nested files** — the
+  "hierarchical AGENTS.md" in the plans needs an explicit `"instructions": ["*/AGENTS.md"]` glob in
+  `opencode.json`. That fact is now in the generated file, the README and `architecture.md`; it is
+  exactly the sort of thing a missing file gives no clue about. Verified live against the golden
+  fixture's index (3 areas, 11 fragments mapped). `work-win.ps1` prints the command rather than
+  running it: the file lands in someone else's repository, and creating it unasked is a side effect,
+  not help.
+
 ## Next
 **Owner's call pending** between #1 and #2 below — both are ready to start, and #2 needs hardware we
 do not have here.

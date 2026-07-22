@@ -8,6 +8,7 @@
     python -m code_context.dev rollup <repo-path> # bottom-up dir/module/project notes over the leaves
     python -m code_context.dev ingest <docs-path> [repo]  # docs (HTML/.docx/.pdf) -> fragments (no LLM)
     python -m code_context.dev link <repo>       # doc -> class 'mentions' edges (re-run after re-index)
+    python -m code_context.dev agents-md <repo-path> [--force]  # starter AGENTS.md in the TARGET repo
     python -m code_context.dev search <query>     # semantic search over the index
 
 Needs the dev DB up (infra/docker-compose.yml) and Ollama with the embed model pulled (``enrich`` /
@@ -88,6 +89,18 @@ def link(repo: str) -> int:
     return 0
 
 
+def agents_md(repo_path: str, *flags: str) -> int:
+    from . import agents_md as _agents_md
+
+    force = "--force" in flags
+    result = _agents_md.write_starter(repo_path, force=force)
+    if not result["written"]:
+        print(f"agents-md: {result['path']} already exists — left alone (--force to replace)")
+        return 0
+    print(f"agents-md ok: wrote {result['path']} ({result['modules']} areas mapped) — fill in the TODOs")
+    return 0
+
+
 def search(*query: str) -> int:
     for f in tools.search_code(" ".join(query), limit=8):
         print(f"{f['path']}:{f['line_start']}  {f['kind']} {f['symbol']}")
@@ -115,6 +128,7 @@ COMMANDS = {
     "rollup": rollup,
     "ingest": ingest,
     "link": link,
+    "agents-md": agents_md,
     "search": search,
     "usages": usages,
     "deps": deps,

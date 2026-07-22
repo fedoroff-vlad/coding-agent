@@ -36,6 +36,7 @@ From a fresh clone:
    uv run python -m code_context.dev ingest /path/to/docs-export my-repo   # HTML/.docx/.pdf → docs
    uv run python -m code_context.dev link my-repo                   # doc → class 'mentions' edges
    uv run python -m code_context.dev search "where do we recall memories by vector"
+   uv run python -m code_context.dev agents-md /path/to/java-repo    # starter AGENTS.md in THAT repo
    ```
    Then run the MCP server with `uv run code-context` — all six tools are live.
 
@@ -283,6 +284,25 @@ them — a wrong answer rather than a wide one. **Its value is the repo's *name*
 exact string compare — a path there matches no row, so every tool returns nothing while the setup
 looks complete. (That is not hypothetical: this file said `/path/to/your/repo` until a live check
 returned 0 results for the path and 10 for the name.)
+
+**Give the shell its instructions.** Wiring the tools is not the same as getting them used: with no
+rules file, opencode falls back to opening and grepping files — the whole-repo-in-the-window habit
+this project exists to replace. `AGENTS.md` in the **target** repository is what changes that, and
+`agents-md` writes a starter:
+
+```sh
+uv run python -m code_context.dev agents-md /path/to/your/repo   # --force to replace
+```
+
+It generates the half a machine can know — a retrieval protocol naming the six tools, and a map of
+the repo's top-level areas taken *from the index* — and leaves every convention as an explicit
+`TODO`. It invents nothing: a plausible-sounding rule that no human wrote is authoritative-looking
+text an agent will follow. An existing `AGENTS.md` is never overwritten without `--force`.
+
+Two facts worth knowing: opencode reads the project's `AGENTS.md` (falling back to `CLAUDE.md`) and
+a global `~/.config/opencode/AGENTS.md`, but it does **not** auto-discover nested files in
+subdirectories — a monorepo hierarchy needs an explicit glob, e.g. `"instructions": ["*/AGENTS.md"]`
+in `opencode.json`.
 
 **Skills.** opencode discovers `SKILL.md` only in six fixed locations, and a submodule under
 `tools/` is not one of them, so the skills in [`tools/agent-skills/`](tools/agent-skills) have to be

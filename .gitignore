@@ -26,6 +26,8 @@ venv/
 # Logs / scratch
 logs/
 *.log
+# Cygwin/MSYS crash dumps — a grep abort on this platform drops one in the repo root.
+*.stackdump
 
 # Stray LLM notes from a dev enrich run against this repo (real targets commit these — Layer 1).
 .code-context/
@@ -33,6 +35,12 @@ logs/
 # DB backups (db-backup writes daily dumps here; keep the dir, ignore the dumps)
 infra/backups/*
 !infra/backups/.gitkeep
+
+# Raw local capture (notes/README.md explains the flow). Gitignored on purpose: capture has to be
+# frictionless enough to name real systems, and this repo is public. Only the scrubbed form, in
+# plans/INBOX.md, is committed.
+notes/*
+!notes/README.md
 
 # Local denylist for tools/agent-skills/scripts/check-private-terms.* (scrub-identity).
 # A committed denylist names exactly what it hides — never track this file.

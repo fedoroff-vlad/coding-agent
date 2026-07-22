@@ -6,8 +6,12 @@ RAG-MCP on top of a **reused** agent shell. Sibling project: ai-life (`../ai-lif
 ## Session start — reading order
 1. This file (`CLAUDE.md`).
 2. `plans/STATUS.md` — what's in flight / the next slice.
-3. `plans/INDEX.md` — map of the plans; pick the relevant one.
-4. The one relevant plan (`plans/REFERENCE.md` — strategy + architecture; `plans/roadmap.md` — how we build it).
+3. `plans/INBOX.md` — findings from real use, awaiting triage. **Read it before proposing what to
+   build next**: an item there came from a session where the tool actually failed, which outranks
+   anything the roadmap guessed at. (Raw, unscrubbed capture lives in the gitignored `notes/` on the
+   machine where it happened — it never syncs, by design.)
+4. `plans/INDEX.md` — map of the plans; pick the relevant one.
+5. The one relevant plan (`plans/REFERENCE.md` — strategy + architecture; `plans/roadmap.md` — how we build it).
 
 ## Reusable dev-workflow skills  (submodule: tools/agent-skills/)
 Portable skills shared with ai-life (source: github.com/fedoroff-vlad/agent-skills). Before doing one of these classes of work, read the matching `tools/agent-skills/skills/<name>/SKILL.md` and follow it instead of re-deriving:

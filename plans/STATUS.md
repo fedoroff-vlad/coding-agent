@@ -432,6 +432,37 @@ slice cost us to learn.
   What C-9 still owes: size/rate limits on ingest, a deliberate review of the `openai:`/`anthropic:`
   egress, and whatever a genuinely hostile corpus teaches.
 
+- **A capture path for findings from real use — DONE.** The most valuable input this project can get
+  is a session where retrieval *failed*, and that signal is perishable: by the next day it is
+  "something was a bit off". But capture has to be frictionless enough to name real systems, and
+  **this repository is public** — one file cannot be both. So there are two, with an explicit arrow
+  between them: `notes/` (gitignored, raw, local, may name anything; only its README is committed)
+  → `scripts/scrub-file.{ps1,sh}` shows what to redact → `plans/INBOX.md` (committed, English,
+  identity-free) → a slice, a defect entry, or a documented "no". `CLAUDE.md`'s reading order now
+  puts INBOX above the roadmap, because an item there came from something that actually failed,
+  which outranks anything a plan guessed at.
+  **The scrub script exists because the pre-commit check deliberately cannot see `notes/`** — that
+  directory is ignored precisely so raw capture can be specific. It answers the other question:
+  *what must I redact from this file before pasting it somewhere?*
+
+- **The private-terms guard failed OPEN on non-ASCII terms — FIXED UPSTREAM** (agent-skills#8,
+  submodule bumped here). Found by accident while testing the scrub script: it caught the Latin
+  spellings of a name and silently missed the Cyrillic ones. Both twins were broken, differently.
+  **`.sh`:** Git-Bash inherits an empty locale, and there `grep -i` **aborts (SIGABRT)** on the
+  first non-ASCII case-fold — and the existing `2>/dev/null || true` swallowed the abort and read it
+  as *no hits*. Verified on the real hook before the fix: a staged file containing the Cyrillic
+  company name **passed** (exit 0, commit allowed). Now the greps run under `LC_ALL=C.UTF-8`, and any
+  grep status other than `0`/`123` exits 2 loudly — a crashed guard must never look like a passing
+  one. **`.ps1`:** `Get-Content`/`Select-String` default to the ANSI codepage in PowerShell 5.1, so
+  a BOM-less UTF-8 terms file decoded as mojibake; both now read `-Encoding UTF8`.
+  *Bycatch worth remembering:* `rc=$?` cannot sit behind `if ! cmd` — the negation rewrites the very
+  status it was meant to read, so every failure arrives as `0`. My first guard printed "grep failed
+  (status 0)". It is `cmd || rc=$?`.
+  **The uncomfortable part:** this was written the same day as the §Security doctrine, and the
+  doctrine's own checklist ("is the guard asserted by a test rather than by a comment?") is what a
+  repo with no tests could not answer. agent-skills has neither CI nor tests; both fixes were
+  verified by hand.
+
 ## Next
 **Owner's call pending** between #1 and #2 below — both are ready to start, and #2 needs hardware we
 do not have here.
@@ -475,7 +506,14 @@ do not have here.
 ## Cross-repo pending (agreed, not yet done)
 These are chores in *other* repos that this repo's work created. They live here because nothing else
 tracks them, and a cross-repo tail is exactly what gets dropped at the end of a session.
-- *(none open — the LC-4 tail closed the same day; see below.)*
+- **ai-life: bump the `agent-skills` submodule to `66db2b0` and install the pre-commit hook.** Two
+  separate things, both security-relevant, neither visible from this repo's CI:
+  1. its pinned `agent-skills` still carries the **fail-open** private-terms check (agent-skills#8 —
+     a non-ASCII term passes silently on Windows). ai-life is public too;
+  2. checked here on 2026-07-22: ai-life has **no `.private-terms` and no pre-commit hook at all**,
+     so nothing guards it either way. Install with
+     `printf '#!/bin/sh\nexec "$(git rev-parse --show-toplevel)"/tools/agent-skills/scripts/check-private-terms.sh\n' > .git/hooks/pre-commit`
+     and carry the terms file over out of band — never through a repo.
 
 **Closed 2026-07-21:**
 - **ai-life: the `/v1/model-profile` endpoint — DONE** (ai-life#355, its slice LC-4). Both halves of

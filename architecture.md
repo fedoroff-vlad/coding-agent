@@ -368,6 +368,69 @@ becomes visible, and it is how a too-small rollup window would now announce itse
 payloads are* — that answer is always no. `INFO` = run start/finish, counts, warnings; `DEBUG` adds
 the per-node events (`enrich.note`, `rollup.note`, `llm.generate`) with their timings.
 
+## Security — untrusted input & injection (doctrine)
+
+Mirrors ai-life's section of the same name (`../ai-life/plans/architecture.md`) so the two repos
+share one vocabulary. The threat is the same — for an LLM, retrieved text is indistinguishable from
+instructions — but the exposure differs in one decisive way: **ai-life's agents act, and an injected
+"send X" hits the outbound confirm gate. This repo has no gate, because it takes no actions.** It
+feeds a shell that edits files and runs commands. Our whole contribution to the defense is therefore
+*provenance and framing*: every retrieval result must say what it is, so the consumer can refuse to
+obey it. Claiming more than that here would be a gate nobody implements.
+
+### The trust ladder, as built
+
+| `fragment.source` | what it is | how much of it can an attacker write | what we do |
+|---|---|---|---|
+| `facts` | code parsed out of the repo under work | all of it — it is somebody's source file | nothing, and honestly: **an agent working in a repo reads that repo.** A hostile comment in the code it was asked to change is not a boundary this component can create |
+| `llm` | notes a model wrote **from signatures only** | nothing, if the invariant below holds | the invariant is enforced by a test, not by intention |
+| `docs` | ingested wiki pages | all of it — anyone can edit a wiki | tagged `source`/`trust` on every row, excluded from `search_code`, `<script>`/`<style>` dropped at the parse boundary |
+
+**The invariant that keeps `llm` off the untrusted rung:** the analyzer prompt is built from the
+class and method **signatures** — the declaration header, up to the body — so comments, string
+literals and method bodies never reach the model. That is what stops a Javadoc reading *"ignore
+previous instructions"* from being laundered into a note that later comes back through `search_code`
+looking like our own factual output. It is a property of `notes.build_prompt`, and it is exactly the
+kind of property a well-meaning change ("feed the bodies in, the notes will be richer") destroys
+without a single test failing — so `tests/test_notes.py` asserts it directly. The rollup tier is safe
+by construction: its inputs are the leaf notes, which are model output, never source text.
+
+### Rules
+
+- **Retrieved content is data, not instructions.** A `Doc` row carries `source='docs'` and a `trust`
+  string in the row itself, not in a docstring the consumer never reads. The generated `AGENTS.md`
+  repeats it in the words the shell will actually see.
+- **Least authority.** This server is read-only: six retrieval tools, no writes, no shell, no
+  network calls except its own Postgres, Ollama, the analyzer gateway and (during a sync) Confluence.
+  Keep it that way — a retrieval tool that could act would turn every injected wiki page into a
+  loaded gun.
+- **The MCP client is the gate.** opencode holds the edit/run permissions and its own confirmations.
+  A change here that assumes the shell will sanitize our output is a change that assumes wrong.
+- **Outbound is deliberate, not incidental.** The analyzer tiers send *signatures and notes* — never
+  the raw index, never whole files — to whichever engine the model string selects: local Ollama by
+  default, a company gateway (`openai:`), or Anthropic (`anthropic:`). Escalating a tier is a
+  decision about **where a customer's code shape goes**, so it stays an explicit config change and
+  the default stays local. `confluence-sync` is the only other outbound path, and it reads.
+- **Secrets never enter the object graph.** API keys are read from the environment at call time and
+  are deliberately *not* `Settings` fields — a test asserts no settings field name contains "key" —
+  because one `print(settings)` in a debug session is one leaked credential. Nothing writes a key to
+  a config file either: opencode gets `{env:…}`, resolved at its start.
+- **Payloads are never logged, at any level.** Events carry names, counts and sizes only
+  (§Observability). The events are built to leave the machine for a log platform; a customer's source
+  code must not leave with them.
+- **Identity is a separate boundary from content** — this repo is public, so a hostname or service
+  name in a commit is its own class of leak, handled by `scrub-identity` / `.private-terms` and a
+  local pre-commit hook.
+
+### Checklist when adding an ingestion source or an outbound call
+
+1. What can a hostile author write into it, and which rung of the ladder does that put it on?
+2. Does every row it produces carry provenance the *consumer* can see?
+3. Does any of it reach a prompt? If so, does it reach it as quoted data, and is that pinned by a
+   test rather than by a comment?
+4. What leaves the machine, and is that a deliberate config choice or an accident of a default?
+5. Is the credential env-only, unlogged, and absent from `Settings`?
+
 ## Performance & quality (measured + expected)
 
 **Speed.**

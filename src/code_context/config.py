@@ -76,6 +76,27 @@ class Settings(BaseSettings):
     # index; a session pinned to one project should set this.
     default_repo: str = ""
 
+    # Confluence REST sync (roadmap decision B, the automatic half of the docs front). The site URL
+    # as you see it in a browser — e.g. https://wiki.example.internal, or https://<site>.atlassian.net
+    # for Cloud. NEVER commit the real one: an internal hostname identifies an employer as surely as
+    # a name does (scrub-identity / .private-terms).
+    confluence_base_url: str = ""
+    # The REST root under the site. Data Center/Server serves /rest/api; Cloud serves /wiki/rest/api.
+    # Explicit rather than sniffed: probing would fail confusingly behind SSO, and a wrong guess
+    # looks like an auth problem.
+    confluence_api_path: str = "rest/api"
+    # Set for Cloud ONLY: it makes the client send Basic (email + API token) instead of a Bearer
+    # token. Empty = a Data Center Personal Access Token. The token itself is env-only
+    # (CODE_CONTEXT_CONFLUENCE_TOKEN) and deliberately not a field here — see the OpenAI key.
+    confluence_email: str = ""
+    # 'view' = macros RENDERED (a code macro arrives as <pre>, a table macro as <table>), which is
+    # the shape D-1's parser was written against, since an export is rendered too. 'storage' is the
+    # raw editor format — use it only if a site refuses view rendering, and expect macros to arrive
+    # as <ac:structured-macro> the parser cannot see into.
+    confluence_body_format: str = "view"
+    confluence_page_limit: int = 50   # pagination window; the API caps it well below a whole space
+    confluence_timeout_s: int = 60
+
     # Docs ingest (C-3). A section larger than this is split into parts that keep the same heading
     # path — one giant wiki table would otherwise produce a fragment too large to embed usefully.
     docs_max_chars: int = 4000

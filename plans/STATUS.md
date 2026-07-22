@@ -1,10 +1,13 @@
 # STATUS — coding-agent (update at the end of each PR)
 
-**Where we are (2026-07-21):** phases **C-0…C-4 shipped**, **C-3 closed** — the index, the graph, the
-LLM notes and the docs corpus all run end to end, and no MCP tool is a stub. **C-6a (the lifecycle
-signal to ai-life) is built**, ahead of C-6. **Not started:** the onboarding kit (C-5), the agent
-shell (C-6), the SDD layer (C-7), the Java sidecar (C-8), security hardening (C-9). **Open inside shipped phases:** the docs front reads only a
-Confluence HTML export (Opus rollup escalation closed 2026-07-20). Phase table with state:
+**Where we are (2026-07-22):** phases **C-0…C-4 shipped**, **C-3 closed and then extended** (the
+Confluence REST sync closed decision B) — the index, the graph, the LLM notes and the docs corpus
+all run end to end, and no MCP tool is a stub. **C-6 (opencode) is done for the work profile**:
+installed, pointed at the company gateway, holding the MCP server and the skills; the Mac profile is
+what remains. **C-6a (the lifecycle signal to ai-life) is built.** **C-7 has begun** — the `AGENTS.md`
+starter ships; the OpenSpec cycle does not. **Not started:** the onboarding kit (C-5), the Java
+sidecar (C-8), security hardening (C-9). **Open inside shipped phases:** OCR for scanned PDFs.
+Phase table with state:
 [roadmap.md](roadmap.md). The bullets below are the slice-level record — what shipped and what each
 slice cost us to learn.
 
@@ -368,6 +371,44 @@ slice cost us to learn.
   running it: the file lands in someone else's repository, and creating it unasked is a side effect,
   not help.
 
+- **Confluence REST sync — DONE (decision B closed).** The docs front read an exported corpus, which
+  works and goes stale the moment somebody edits a page: re-exporting a space by hand is the step
+  nobody repeats. `confluence.py` + `dev confluence-sync <SPACE> <dir> [repo]` fetch the same pages
+  over the API.
+  **It syncs to disk and stops there** — pages are written as HTML into the corpus directory and the
+  existing `ingest_docs` runs over them unchanged. One ingest path instead of two (a second would
+  duplicate the embedding, the section hash and the pruning), the archive stays the greppable,
+  diffable Layer-1 record the notes and `.docx`/`.pdf` passes already keep, and a failed sync leaves
+  the index untouched rather than half-updated. Passing the repo name chains ingest + link in the
+  same command; omitting it stops at the corpus, which is inspectable before anything is embedded.
+  **Decisions worth their reasons:** incremental on Confluence's own **`version.number`** (a body
+  hash re-fetches on a whitespace-only re-render; a timestamp is not monotonic across a restore) —
+  *and* on the file actually being present, or a cleaned corpus would stay permanently short. The
+  page **title is injected as an `<h1>`**: a REST body carries none, an exported page does, and D-1
+  builds the tree from headings — without it every section hangs off whatever heading came first.
+  **`body.view`** by default so macros arrive rendered (code → `<pre>`, table → `<table>`), which is
+  the shape D-1 was written against; `storage` stays available for a site that refuses view
+  rendering. The **page id leads the filename**, so a rename replaces its file instead of leaving a
+  twin, and a deleted page is swept from the corpus. One client covers both editions: `Bearer` for a
+  Data Center PAT, Basic for Cloud when an email is set — the email is the discriminator because it
+  is the thing only Cloud has.
+  **18 tests against an `httpx.MockTransport`, never a live wiki** — the real one is behind the work
+  network, and the guards worth pinning are exactly what a smoke test on a quiet space would not
+  exercise. Mutation-checked, all four red: trusting the manifest over the disk, keeping the renamed
+  twin, skipping the deletion sweep, and dropping the repeated-batch guard — that last one **hangs**,
+  which is the honest demonstration of why it exists (an unbounded request loop against somebody's
+  production wiki).
+  **Driven end to end once against the real DB and embeddings** — a fake wiki through `sync` →
+  `ingest_docs` → `search_docs` — because the unit tests stub the HTTP and never push the result
+  through the parser, which is exactly where the two halves meet. It proved the title injection
+  does its job (the heading path came back as `Platform config conventions / Retry policy`, not a
+  section floating loose), the table survived, the code block kept its indentation and the fence,
+  and every row carried `source`/`trust`. *The first run of that check reported the code block
+  flattened — the check was wrong, not the parser: it asserted against `hits[0]`, which was the
+  other section. A smoke test that inspects whichever row ranked first is a coin flip.*
+  **Not yet driven against a live Confluence**; the base URL and token are private terms and stay
+  out of the repo.
+
 ## Next
 **Owner's call pending** between #1 and #2 below — both are ready to start, and #2 needs hardware we
 do not have here.
@@ -391,9 +432,10 @@ do not have here.
 4. **C-3 residue, deliberately deferred and not forgotten:** **OCR for scanned PDFs** — D-7 reads
    the text layer and reports a scan rather than ingesting it blank; the owner's call was to keep
    OCR out until there is a real scan corpus, and to weigh a shared capability-MCP (as in ai-life)
-   against an in-repo tesseract dependency when it comes; Confluence **REST sync** instead of a manual export (roadmap decision B); distilling
-   pages into thin `AGENTS.md` conventions (roadmap 0.3 — that one *is* model work and belongs with
-   C-7's authored layer). None of it blocks the next phase.
+   against an in-repo tesseract dependency when it comes; and distilling pages into thin
+   `AGENTS.md` conventions (roadmap 0.3 — that one *is* model work; the *starter* shipped without a
+   model, the distillation is what still needs one). The Confluence **REST sync** left this list —
+   it shipped, see the slice above. None of it blocks the next phase.
 5. **Then the unstarted phases in roadmap order:** C-6 is **partly done** — the shell is decided
    (**opencode**, decision D closed 2026-07-21) and the **work profile is complete**: installed,
    pointed at the company gateway, holding the MCP server and the skills (`scripts/work-win.ps1`);

@@ -112,6 +112,7 @@ context layers (REFERENCE §3, roadmap §Architecture):
 | `llm.py` | The only caller of the **analyzer** model (the generative counterpart of `embeddings.py`). Three engines behind one `generate()`: local Ollama, the **cloud tier** for a model prefixed `anthropic:` (C-4 escalation, official SDK, lazily imported from the `[cloud]` extra), and the **OpenAI-dialect tier** for `openai:` — a company gateway over plain httpx, key from env only. The model string alone selects the engine — it already feeds the incremental keys, so a separate provider knob could drift under them. Strips the qwen3 `<think>` preamble locally and the `/no_think` directive on the way out. Swapping/escalating models is a config change. |
 | `lifecycle.py` | The C-6a handshake with ai-life over its `/v1/model-profile`: signal `coder-active` and wait for the confirmed downshift **before** the local analyzer model loads, unload + confirm + signal `normal` on release, idle TTL in between. Opt-in (`CODE_CONTEXT_LIFECYCLE_*`, default OFF) — with the flag off it makes no calls and this repo is standalone. Called from `llm.py` (acquire) and `dev.py` (release). |
 | `indexer/` | Builds the index from a repo. `java.py` = tree-sitter chunker (types + methods, exact names/lines) + `parse_edges` (imports/calls). `__init__.index_repo` walks `*.java` → embed → upsert `code.fragment` (incremental by hash) + rebuild `code.edge`. `notes.py` + `enrich_repo` = the C-4a leaf pass (a `note` per non-trivial class, anchored to real signatures). `rollup.py` + `rollup_repo` = the C-4b bottom-up pass: directory→module→project notes synthesized over the leaves (root → `project`, marker dir → `module`), incremental on each dir's input digest. **Pass-through directories are collapsed** (`collapse_chains`): a dir with no classes of its own and exactly one child costs an LLM call to restate its child, so the parent links straight through — except the root and module-marker dirs, whose tiers are meaningful. Deep Java packages make these chains the common case. `docs.py` + `ingest_docs` = the C-3 docs pass (exported HTML, `.docx` and `.pdf` → sections → `doc` fragments, no LLM; a binary format is converted to markdown and archived as Layer 1 first — D-6/D-7), and `link_docs` writes the doc→class `mentions` edges over the same `code.edge` table. |
+| `confluence.py` | The REST sync (decision B): walks a space's pages and writes them as HTML into a corpus directory for `ingest_docs` — sync and ingest stay separable, so the archive is inspectable before anything is embedded. Incremental on `version.number`; renames keep one file (the page id leads the filename), deletions are swept. Bearer for a Data Center PAT, Basic for Cloud when an email is configured; token from env only. Never logs a page body. |
 | `agents_md.py` | The authored layer's starter (C-7): renders `AGENTS.md` **into the target repo** — a retrieval protocol naming the six tools, plus a map of top-level areas read back from the index (`module_map`). Rendering is pure (the map is an argument), so it is testable without a DB, and an unreachable index degrades to an honest "not indexed yet" rather than blocking the file. Never overwrites an authored file without `--force`; states no convention of its own. |
 | `dev.py` | Dev CLI: `db-ping`/`migrate`/`embed-smoke` (infra) + `index`/`enrich`/`rollup`/`ingest`/`link`/`search`/`usages`/`deps` (drive the indexer) + `agents-md` (the authored starter). |
 
@@ -240,10 +241,22 @@ domain works that way* — on a real repo the analyzer wrote "life situation-bas
 from a signature, with no idea what a life situation means in the business. That knowledge lives in
 Confluence, not in signatures.
 
-**Source: a Confluence HTML export, dropped in a directory** (roadmap decision B: manual export
-first, REST sync later). One parser, the most common source, and the structure that matters —
-headings, tables, code blocks — survives the export. `.docx`/`.pdf` are deliberately out of the
-first slice; the parser seam is shaped so they slot in as another front, not a rewrite.
+**Source: a directory of pages** — a Confluence HTML export dropped in by hand, or the same pages
+fetched by the **REST sync** (decision B, closed 2026-07-22: both paths, one ingest). One parser,
+the most common source, and the structure that matters — headings, tables, code blocks — survives
+the export. `.docx`/`.pdf` are deliberately out of the first slice; the parser seam is shaped so
+they slot in as another front, not a rewrite.
+
+**The sync writes to disk and stops there** (`confluence.py`): pages land as HTML in the corpus
+directory and `ingest_docs` runs over them unchanged. One ingest path rather than two; the archive
+stays the greppable, diffable Layer-1 record the notes and binary-format passes already keep; and a
+failed sync leaves the index untouched rather than half-updated. It is incremental on Confluence's
+own **`version.number`** — a body hash would re-fetch on a whitespace-only re-render, and a
+timestamp is not monotonic across a restore. The page **title is injected as an `<h1>`** because a
+REST body carries none and the section tree is built from headings; `body.view` is the default
+expansion so macros arrive *rendered* (code → `<pre>`, table → `<table>`), which is the shape this
+parser was written against. Auth follows the edition: a Data Center PAT as `Bearer`, or Cloud's
+Basic (email + API token) when `CODE_CONTEXT_CONFLUENCE_EMAIL` is set; the token is env-only.
 
 **Shape: a section is the unit.** A document is parsed into a tree by heading level; each leaf
 section becomes one fragment carrying its **heading path** (`Payments / Refunds / Claim rules`) as its

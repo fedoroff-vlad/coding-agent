@@ -302,6 +302,33 @@ slice cost us to learn.
   *Why it slipped:* the wiring slice was verified by reading the config it wrote, never by asking
   the running server for a result — "the file has the right shape" is not "the tool answers".
 
+- **Clone → one command, on a machine that has never seen this repo — DONE.** The work machine is a
+  *different* Windows box: `coding-agent` gets cloned there, and everything so far had been verified
+  on the box where it was developed — where the submodule was already checked out, the hook was
+  already installed and the tools were already on PATH. A clone of this branch into a scratch
+  directory showed all three assumptions failing at once: **0** files under `tools/agent-skills`, no
+  pre-commit hook, no terms file. Fixed in `work-win.ps1`:
+  - **submodule init** when `tools/agent-skills` is empty, instead of a hint printed at the very end
+    (a clone without `--recurse-submodules` is the default outcome, not the exception);
+  - it **asks which repository to index** when `-Repo` is missing — but only when a human can
+    answer (`[Console]::IsInputRedirected` guards CI and pipes, which keep the old warn-and-skip);
+  - a **prerequisite check** for Docker Desktop and Ollama that names them and prints the winget
+    command, because `start-win.ps1` reports a missing Docker as "Docker isn't running", which on a
+    fresh machine sends you looking for a service nobody installed. These two stay the operator's
+    job: both want a reboot, and an administrator on a managed box;
+  - it **installs the private-terms hook** and warns until the terms exist. Neither half of that
+    guard survives a clone — the file is gitignored *by design* and the hook lives in `.git/hooks/`
+    — so every new machine starts unprotected, and this one is about to be pointed at an employer's
+    source. The terms travel out of band; the hook does not need to.
+  **Two PowerShell defects the clone test caught**, both invisible on the dev box: `git submodule
+  update` writes progress to **stderr**, and under `ErrorActionPreference='Stop'` PowerShell 5.1
+  turns a native command's stderr into a terminating `NativeCommandError` — so a *successful* init
+  aborted the script (now captured, judged by `$LASTEXITCODE`, the same idiom `start-win.ps1` uses
+  for `docker info`). And `Set-Content` ended the hook's shebang with **CRLF**: Git for Windows
+  tolerates `#!/bin/sh<CR>`, the same clone on the Mac would not — written by hand as LF, no BOM,
+  like the `opencode.json` writer above. Verified in the clone: submodule populated, hook LF and
+  running, 11 skills installed, exit 0, and the prompt correctly silent under a redirected stdin.
+
 ## Next
 **Owner's call pending** between #1 and #2 below — both are ready to start, and #2 needs hardware we
 do not have here.

@@ -51,6 +51,17 @@ function Sync-PathFromMachine {
                 [System.Environment]::GetEnvironmentVariable('Path', 'User')
 }
 
+# The one thing this script cannot guess and cannot work without. Ask for it rather than
+# "succeeding" into an empty index - the whole setup then looks done and answers nothing. Only
+# when a human is there to answer: a non-interactive host (CI, a pipe) keeps the old warn-and-skip.
+if (-not $Repo -and $Host.UI.RawUI -and -not [Console]::IsInputRedirected) {
+    Write-Host ""
+    Write-Host "Which repository should this setup point at? A local working copy, e.g. C:\src\my-monorepo."
+    Write-Host "It gets indexed (unless -SkipIndex) and becomes opencode's default retrieval scope."
+    $answer = Read-Host "   path (Enter to skip)"
+    if ($answer) { $Repo = $answer.Trim('"') }   # a pasted Windows path often arrives quoted
+}
+
 if ($Repo) {
     if (-not (Test-Path $Repo)) { throw "-Repo '$Repo' does not exist." }
     $Repo = (Resolve-Path $Repo).Path   # opencode gets an absolute path, whatever you typed
@@ -65,8 +76,65 @@ if ($GatewayUrl -and $GatewayUrl -notmatch '/v\d+/?$') {
     Write-Host "!! -GatewayUrl '$GatewayUrl' does not end in /v1 - the OpenAI dialect wants the version prefix."
 }
 
+# ---------------------------------------------------------------- 0. a fresh clone
+# `git clone` without --recurse-submodules leaves tools/agent-skills an empty directory. The skills
+# step at the end would then just print a hint and finish "OK" - so fix it here instead, where the
+# fix is one command and the machine is still being set up.
+if (-not (Get-ChildItem (Join-Path $root 'tools\agent-skills') -ErrorAction SilentlyContinue)) {
+    Say 'tools/agent-skills is empty (clone without --recurse-submodules) - initialising...'
+    # git reports progress on STDERR, and under ErrorActionPreference='Stop' PowerShell 5.1 turns a
+    # native command's stderr into a terminating NativeCommandError - so a perfectly successful
+    # `submodule update` aborts the script. Capture the streams and judge by the exit code, the
+    # same way start-win.ps1 handles `docker info`.
+    $out = git submodule update --init --recursive 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host $out
+        throw "git submodule update failed (exit $LASTEXITCODE) - check network/credentials for the agent-skills remote."
+    }
+}
+
+# The private-terms guard does NOT travel with the clone: the terms file is gitignored (a published
+# denylist is the leak, indexed) and the hook lives in .git/hooks. So every clone starts unprotected,
+# and this one is about to be pointed at an employer's source. Install the hook; the terms are the
+# operator's to supply, and out of band - never through the repo.
+$hook = Join-Path $root '.git\hooks\pre-commit'
+if ((Test-Path (Join-Path $root '.git')) -and -not (Test-Path $hook)) {
+    # LF and no BOM, written by hand: Set-Content would end the shebang line with CRLF, and a
+    # `#!/bin/sh<CR>` is the classic "bad interpreter" - Git for Windows tolerates it, the same
+    # clone on the Mac does not.
+    [System.IO.File]::WriteAllText($hook,
+        "#!/bin/sh`nexec `"`$(git rev-parse --show-toplevel)`"/tools/agent-skills/scripts/check-private-terms.sh`n",
+        (New-Object System.Text.UTF8Encoding $false))
+    Say 'installed the private-terms pre-commit hook (.git/hooks/pre-commit)'
+}
+if (-not (Test-Path (Join-Path $root '.private-terms'))) {
+    Write-Host ""
+    Write-Host "!! No .private-terms file - this repo is PUBLIC and nothing is guarding it."
+    Write-Host "   Create it (gitignored, one term per line): the employer's name in every spelling,"
+    Write-Host "   internal domains and hostnames, internal service names, Confluence space keys."
+    Write-Host "   Copy it from your other machine out of band - never through the repo."
+    Write-Host "   Until it exists, every commit here is refused by the hook. See the scrub-identity skill."
+}
+
 if (-not $WireOnly) {
     # ------------------------------------------------------------ 1. infra + python env
+    # Two prerequisites this script installs neither of: Docker Desktop (a reboot and, on a managed
+    # box, an administrator) and Ollama. start-win.ps1 does reach them, but reports the miss as
+    # "Docker isn't running" - which on a fresh machine sends you looking for a service that was
+    # never installed. Name them here, with the exact command, before anything else runs.
+    $missing = @()
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { $missing += 'Docker.DockerDesktop' }
+    if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) { $missing += 'Ollama.Ollama' }
+    if ($missing) {
+        Write-Host ""
+        Write-Host "!! Missing prerequisite(s): $($missing -join ', ')"
+        Write-Host "   Install them, then re-run this script:"
+        foreach ($m in $missing) { Write-Host "     winget install --id $m" }
+        Write-Host "   (Docker Desktop needs a reboot, and an administrator on a managed machine.)"
+        Write-Host "   Everything else - uv, the Python env, the models - this script handles."
+        throw "prerequisites missing: $($missing -join ', ')"
+    }
+
     # start-win.ps1 already owns this half (Docker running, uv present, Ollama up, pgvector up,
     # uv sync, migrate). Reuse it rather than keeping a second copy of the same five steps in step.
     Say 'dev session (Docker, uv, Ollama, pgvector, migrations)...'
@@ -217,7 +285,9 @@ if ($GatewayUrl -and -not (Get-Item "env:$keyVar" -ErrorAction SilentlyContinue)
 $src = Join-Path $root 'tools\agent-skills\skills'
 $dst = Join-Path $cfgDir 'skills'
 if (-not (Test-Path $src) -or -not (Get-ChildItem $src -ErrorAction SilentlyContinue)) {
-    Write-Host "!! $src is empty - run: git submodule update --init --recursive"
+    # Step 0 already tried `git submodule update --init`; still empty means that failed (no network,
+    # no credentials for the skills remote), so say so instead of repeating the same advice.
+    Write-Host "!! $src is still empty after a submodule init - check network/credentials, then re-run with -WireOnly."
 } else {
     if (-not (Test-Path $dst)) { New-Item -ItemType Directory -Force -Path $dst | Out-Null }
     $installed = @()

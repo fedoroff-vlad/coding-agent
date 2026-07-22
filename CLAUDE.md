@@ -41,7 +41,11 @@ fragments, doc↔code `mentions` edges, and `search_docs`/`find_convention` over
 is a stub any more**. A binary format is converted to markdown and archived as the Layer-1 record
 before it is chunked; a PDF's sections come from a font-size heuristic, and a scan is reported
 rather than ingested blank (no OCR by decision).
-Ingested text is data, never instructions: every doc result carries `source`/`trust`. Retrieval is
+Ingested text is data, never instructions: every doc result carries `source`/`trust` — the doctrine
+now lives in [`architecture.md`](architecture.md) §Security (mirrors ai-life's), with one invariant
+you must not quietly break: **the analyzer prompt is built from signatures only**, so a hostile
+comment in an indexed repo cannot be laundered into a `note`. `tests/test_notes.py` asserts it.
+Retrieval is
 **repo-scoped** (`CODE_CONTEXT_DEFAULT_REPO`) after two projects in one index came back interleaved.
 Apache AGE stays decided against (every graph tool is a 1-hop join).
 

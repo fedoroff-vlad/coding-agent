@@ -104,6 +104,23 @@ couplings:
       parameter and never a literal in opencode.json — it is `{env:CODE_CONTEXT_OPENAI_API_KEY}`,
       resolved from the environment, for the same reason llm.py keeps it out of Settings.
 
+  - id: trust-boundary
+    trigger: Changed what reaches a PROMPT, what a tool returns, or what leaves the machine
+    ssot: architecture.md §Security — untrusted input & injection (doctrine)
+    must_update:
+      - architecture.md            # the trust ladder + the rules + the checklist
+      - tests/test_notes.py        # the signatures-only invariant, if the analyzer prompt moved
+      - src/code_context/tools.py  # provenance must travel IN the row, not in a docstring
+      - src/code_context/agents_md.py   # the shell reads the rule from the generated file
+    notes: >
+      This repo has no confirm gate — it takes no actions, it feeds a shell that does. Provenance
+      and framing are therefore the whole defense, and the load-bearing invariant is that the
+      analyzer prompt is built from SIGNATURES only: comments, Javadoc and string literals never
+      reach the model, so a hostile comment in an indexed repo cannot be laundered into a `note`
+      fragment that later reads like our own factual output. A well-meaning "feed the bodies in,
+      the notes will be richer" destroys that without any other test failing — keep it asserted.
+      Mirrors ai-life's §Security doctrine; keep the vocabulary shared.
+
   - id: confluence-sync
     trigger: Changed the Confluence REST sync (endpoints, auth, incremental key, file naming)
     ssot: src/code_context/confluence.py

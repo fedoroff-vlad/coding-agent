@@ -409,6 +409,29 @@ slice cost us to learn.
   **Not yet driven against a live Confluence**; the base URL and token are private terms and stay
   out of the repo.
 
+- **Trust doctrine + the invariant behind it (C-9, first slice) — DONE.** ai-life has a §Security
+  doctrine; this repo had one paragraph about docs ingest and a phase marked *planned*, while the
+  surface quietly grew (an analyzer that ships code shape to a gateway, a sync that carries a token
+  to a wiki, and a shell downstream that edits files). `architecture.md` §Security now states it,
+  in ai-life's vocabulary so the two repos argue in the same terms.
+  **The asymmetry is the point:** ai-life's agents act, so an injected "send X" hits the outbound
+  confirm gate. This repo has no gate — *it takes no actions*, it feeds a shell that does. Provenance
+  and framing are therefore the whole of our contribution, and the doctrine says so rather than
+  implying a protection nobody implements. The ladder is written per `fragment.source`, including
+  the honest rung: for `facts`, **an agent working in a repo reads that repo** — a hostile comment
+  in the code it was asked to change is not a boundary this component can create.
+  **A claim I made and had to withdraw:** I told the owner an injected code comment would be
+  laundered into an LLM note. It would not — `build_prompt` is built from the **declaration header
+  up to the body**, so comments, Javadoc and string literals never reach the model (checked against
+  the parser rather than remembered). The right response was not a fix but a **test**: this is
+  exactly the property a well-meaning change destroys silently ("feed the bodies in, the notes will
+  be richer"), and it was documented nowhere. `test_prompt_carries_no_text_a_source_file_author_
+  could_write` drives a fixture whose Javadoc, line comment and string literal all carry injection
+  text; mutation-checked by switching the prompt from `m.signature` to `m.content`, which turns it
+  red on the string literal. A doctrine sentence would have aged into a lie; the test cannot.
+  What C-9 still owes: size/rate limits on ingest, a deliberate review of the `openai:`/`anthropic:`
+  egress, and whatever a genuinely hostile corpus teaches.
+
 ## Next
 **Owner's call pending** between #1 and #2 below — both are ready to start, and #2 needs hardware we
 do not have here.

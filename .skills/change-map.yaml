@@ -104,6 +104,22 @@ couplings:
       parameter and never a literal in opencode.json — it is `{env:CODE_CONTEXT_OPENAI_API_KEY}`,
       resolved from the environment, for the same reason llm.py keeps it out of Settings.
 
+  - id: agents-md-starter
+    trigger: Changed the generated AGENTS.md (its sections, the map, or what it claims)
+    ssot: src/code_context/agents_md.py
+    must_update:
+      - tests/test_agents_md.py   # the properties, not the prose: retrieval-first + invents nothing
+      - README.md                 # the dev-CLI list + §Give the shell its instructions
+      - architecture.md           # the three-layers list + the package-layout row
+      - src/code_context/dev.py   # the `agents-md` usage line
+    notes: >
+      The file is written into SOMEONE ELSE'S repository and committed there, so two properties are
+      load-bearing and both live in the suite: it must tell the shell to retrieve before reading
+      (without that instruction opencode greps, and the whole RAG sits unused), and it must state
+      no convention a human did not write — an invented rule is authoritative-looking text an agent
+      will follow. opencode does not auto-discover nested AGENTS.md; a monorepo hierarchy needs an
+      explicit `instructions` glob in opencode.json.
+
   - id: skills-pointer
     trigger: Changed the reusable-skills wiring
     must_update:

@@ -359,6 +359,16 @@ if (-not $GatewayUrl) {
     Write-Host "   provider yourself (opencode: /models)."
 }
 Write-Host ""
+if ($Repo) {
+    # Not written automatically: AGENTS.md lands in SOMEONE ELSE'S repository and gets committed
+    # there. Offering the command is help; creating a file in their tree unasked is a side effect.
+    Write-Host ""
+    Write-Host "   Next, give the shell its instructions (AGENTS.md in the target repo - it tells"
+    Write-Host "   opencode to retrieve instead of grepping; without it the tools sit unused):"
+    Write-Host "     uv run python -m code_context.dev agents-md $Repo"
+    Write-Host "   It writes a starter with a map from the index and TODOs for you to fill in."
+}
+Write-Host ""
 Write-Host "   After a reboot, bring the database back with:  .\scripts\start-win.ps1"
 Write-Host "   Re-index after big branch changes:             uv run python -m code_context.dev index <repo>"
 Write-Host "   Optional semantic notes through your gateway:  see CODE_CONTEXT_OPENAI_* in .env.example"

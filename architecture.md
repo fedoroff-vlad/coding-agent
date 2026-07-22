@@ -43,7 +43,13 @@ RAG-first — the agent gets *hands in the codebase* instead of the whole repo i
 context layers (REFERENCE §3, roadmap §Architecture):
 
 1. **Spec/doc (authored, in-repo):** `AGENTS.md` (hierarchical) + `architecture.md` + OpenSpec —
-   thin, authoritative, always loaded.
+   thin, authoritative, always loaded. It lives in the **target** repository and is read by the
+   shell directly; it never travels through this index. `agents_md.py` writes a *starter* — the
+   retrieval protocol plus a map derived from the index — and leaves every convention a `TODO`,
+   because an invented rule is authoritative-looking text an agent will follow. **Hierarchy is not
+   automatic:** opencode reads the project root's file and a global one, but discovers no nested
+   `AGENTS.md`, so a monorepo needs an explicit `"instructions": ["*/AGENTS.md"]` glob in
+   `opencode.json`.
 2. **RAG (machine-built — this component):** code + docs → a derived pgvector + edge-graph index,
    pulled as a narrow slice on demand.
 3. **Shell (reused):** **opencode** drives the loop — decision D, closed 2026-07-21 (roadmap
@@ -91,7 +97,8 @@ context layers (REFERENCE §3, roadmap §Architecture):
 | LLM **leaf** notes (per class, md-as-source → `note` fragment; trivial classes skipped) | ✅ built (C-4a) |
 | LLM note **rollups** (bottom-up directory→module→project, md-as-source → tier fragments) | ✅ built (C-4b) |
 | Lifecycle signal to ai-life (`coder-active` handshake + confirmed unload + idle TTL), opt-in | ✅ built (C-6a) |
-| Authored layer (`AGENTS.md` / OpenSpec) · agent-shell wiring · Java sidecar (type resolution) | ○ planned → C-7 / C-6 / C-8 |
+| Authored layer: `AGENTS.md` **starter generator** (`agents_md.py` + `dev agents-md`) | ✅ built (C-7, first slice) |
+| Authored layer: OpenSpec cycle · Java sidecar (type resolution) | ○ planned → C-7 / C-8 |
 
 ### Package layout (`src/code_context/`)
 
@@ -105,7 +112,8 @@ context layers (REFERENCE §3, roadmap §Architecture):
 | `llm.py` | The only caller of the **analyzer** model (the generative counterpart of `embeddings.py`). Three engines behind one `generate()`: local Ollama, the **cloud tier** for a model prefixed `anthropic:` (C-4 escalation, official SDK, lazily imported from the `[cloud]` extra), and the **OpenAI-dialect tier** for `openai:` — a company gateway over plain httpx, key from env only. The model string alone selects the engine — it already feeds the incremental keys, so a separate provider knob could drift under them. Strips the qwen3 `<think>` preamble locally and the `/no_think` directive on the way out. Swapping/escalating models is a config change. |
 | `lifecycle.py` | The C-6a handshake with ai-life over its `/v1/model-profile`: signal `coder-active` and wait for the confirmed downshift **before** the local analyzer model loads, unload + confirm + signal `normal` on release, idle TTL in between. Opt-in (`CODE_CONTEXT_LIFECYCLE_*`, default OFF) — with the flag off it makes no calls and this repo is standalone. Called from `llm.py` (acquire) and `dev.py` (release). |
 | `indexer/` | Builds the index from a repo. `java.py` = tree-sitter chunker (types + methods, exact names/lines) + `parse_edges` (imports/calls). `__init__.index_repo` walks `*.java` → embed → upsert `code.fragment` (incremental by hash) + rebuild `code.edge`. `notes.py` + `enrich_repo` = the C-4a leaf pass (a `note` per non-trivial class, anchored to real signatures). `rollup.py` + `rollup_repo` = the C-4b bottom-up pass: directory→module→project notes synthesized over the leaves (root → `project`, marker dir → `module`), incremental on each dir's input digest. **Pass-through directories are collapsed** (`collapse_chains`): a dir with no classes of its own and exactly one child costs an LLM call to restate its child, so the parent links straight through — except the root and module-marker dirs, whose tiers are meaningful. Deep Java packages make these chains the common case. `docs.py` + `ingest_docs` = the C-3 docs pass (exported HTML, `.docx` and `.pdf` → sections → `doc` fragments, no LLM; a binary format is converted to markdown and archived as Layer 1 first — D-6/D-7), and `link_docs` writes the doc→class `mentions` edges over the same `code.edge` table. |
-| `dev.py` | Dev CLI: `db-ping`/`migrate`/`embed-smoke` (infra) + `index`/`enrich`/`search`/`usages`/`deps` (drive the indexer). |
+| `agents_md.py` | The authored layer's starter (C-7): renders `AGENTS.md` **into the target repo** — a retrieval protocol naming the six tools, plus a map of top-level areas read back from the index (`module_map`). Rendering is pure (the map is an argument), so it is testable without a DB, and an unreachable index degrades to an honest "not indexed yet" rather than blocking the file. Never overwrites an authored file without `--force`; states no convention of its own. |
+| `dev.py` | Dev CLI: `db-ping`/`migrate`/`embed-smoke` (infra) + `index`/`enrich`/`rollup`/`ingest`/`link`/`search`/`usages`/`deps` (drive the indexer) + `agents-md` (the authored starter). |
 
 Dev infra lives in `infra/docker-compose.yml` — an isolated `pgvector/pgvector:pg16` container on host
 port 5433 (ai-life's DB owns 5432), so an experimental index never touches production data. A

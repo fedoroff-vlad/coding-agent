@@ -88,6 +88,22 @@ couplings:
       fails the coder run; "carry on anyway" is the over-budget load the handshake exists to
       prevent.
 
+  - id: opencode-wiring
+    trigger: Changed how the work machine reaches opencode (install, provider/gateway, MCP entry)
+    ssot: scripts/work-win.ps1
+    must_update:
+      - README.md              # §Use it on a work machine — the script AND its portable form
+      - winget-packages.json   # the shell has to be installable, not just configurable
+      - .env.example           # CODE_CONTEXT_OPENAI_* — the gateway the analyzer shares with the shell
+      - architecture.md        # the Shell bullet in §The product
+    notes: >
+      Two consumers reach one gateway: opencode (the model the agent thinks with, an
+      `@ai-sdk/openai-compatible` provider block) and llm.py's `openai:` tier (the optional
+      enrich/rollup notes). They share the URL and the key, so changing one side's story without
+      the other leaves an operator configuring half a machine. The KEY is never a script
+      parameter and never a literal in opencode.json — it is `{env:CODE_CONTEXT_OPENAI_API_KEY}`,
+      resolved from the environment, for the same reason llm.py keeps it out of Settings.
+
   - id: skills-pointer
     trigger: Changed the reusable-skills wiring
     must_update:

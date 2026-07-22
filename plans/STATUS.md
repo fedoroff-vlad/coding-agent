@@ -254,6 +254,36 @@ slice cost us to learn.
   (`docker ps` itself stopped responding after the full Testcontainers `verify`), so steps 1–3 have
   only ever run as `start-win.ps1`, which is unchanged and was already in use.
 
+- **The shell actually reaches a model (C-6, work profile) — DONE.** The previous slice wired
+  opencode's *hands* (the MCP server) and deliberately said nothing about its *head*, on the
+  reasoning that retrieval needs no LLM — true, and it left the work profile one step short of
+  usable: `work-win.ps1` wrote a config for a shell **that nothing installed** (opencode is not in
+  `winget-packages.json`, and the script never checked), and it configured no provider, so the
+  gateway the owner actually types into had to be set up by hand and was written down nowhere.
+  Both closed here: `SST.opencode` joins the winget set, the script installs it when missing
+  (re-reading PATH first — a shell that predates the install otherwise re-runs winget for a slow
+  no-op), and `-GatewayUrl … -Model …` merges an `@ai-sdk/openai-compatible` **provider** block +
+  the default `model` alongside the MCP entry.
+  **One gateway, one key, two consumers** — opencode and `llm.py`'s `openai:` analyzer tier — so
+  the key stays `CODE_CONTEXT_OPENAI_API_KEY` and the config gets opencode's `{env:…}` reference,
+  never the value. **The key is deliberately not a parameter**: a secret on a PowerShell command
+  line is in PSReadLine history and in the process list, which is the same reasoning that keeps it
+  out of `Settings`. A missing key is reported at setup, where the cause is still on screen,
+  rather than as a 401 at the first prompt.
+  **Verified against a redirected `XDG_CONFIG_HOME`** — fresh-create; merge (a foreign provider,
+  a foreign MCP entry and `theme` all survive, `model` switches to ours); re-run idempotency; the
+  JSONC branch printing both snippets and leaving the file byte-identical; and the guards
+  (`-GatewayUrl` without `-Model` throws, a base URL missing `/v1` warns, no `-GatewayUrl` at all
+  ends with an explicit "the shell has nothing to think with"). Two things this cost: PowerShell's
+  escape is a **backtick**, not `\` (the printed JSONC hint would have read `\"model\"`), and the
+  script inherited `$LASTEXITCODE` from winget's non-zero "already installed" — so a successful
+  setup exited non-zero. Both fixed; `Set-Prop` replaced the third copy of the
+  add-member-or-assign dance.
+  *Ops, not code:* Docker Desktop on the VDI had wedged again (`dockerd` alive, API not answering,
+  `docker ps` hanging past two minutes, stale CLI processes from the previous session) — a restart
+  of the engine brought it back and pgvector with it. That is the second occurrence; if it becomes
+  routine the answer is an external-DSN path in the scripts, not a third manual restart.
+
 ## Next
 **Owner's call pending** between #1 and #2 below — both are ready to start, and #2 needs hardware we
 do not have here.
@@ -281,9 +311,13 @@ do not have here.
    pages into thin `AGENTS.md` conventions (roadmap 0.3 — that one *is* model work and belongs with
    C-7's authored layer). None of it blocks the next phase.
 5. **Then the unstarted phases in roadmap order:** C-6 is **partly done** — the shell is decided
-   (**opencode**, decision D closed 2026-07-21) and wired (`scripts/work-win.ps1`), and the C-6a
-   signal it was to carry shipped earlier; what is left of it is the *Mac* profile (opencode against
-   the local `qwen3-coder:30b`), which needs the Mac. Then SDD wiring (C-7) → per-stack plugins +
+   (**opencode**, decision D closed 2026-07-21) and the **work profile is complete**: installed,
+   pointed at the company gateway, holding the MCP server and the skills (`scripts/work-win.ps1`);
+   the C-6a signal it was to carry shipped earlier. What is left of it is the *Mac* profile — the
+   same provider mechanism against local Ollama's `/v1` and `qwen3-coder:30b` — which needs the Mac.
+   Still unproven on the work profile: a real prompt through the real gateway (the provider block
+   is verified as *written*, not as *answering*), and `AGENTS.md` in the target repo, without which
+   the shell has the retrieval tools but no instruction to prefer them over reading files. Then SDD wiring (C-7) → per-stack plugins +
    the Java sidecar (C-8) → security hardening (C-9).
 
 ## Known defects (found, not yet fixed)

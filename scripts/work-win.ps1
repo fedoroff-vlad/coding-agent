@@ -7,11 +7,19 @@
 #   .\scripts\work-win.ps1 -WireOnly                          # just opencode: re-register + refresh skills
 #
 # What it does: dev session (Docker + uv + pgvector + migrations) -> the embed model -> index your
-# repo -> register the code-context MCP server in opencode -> install the dev-workflow skills.
+# repo -> install opencode -> point it at your company gateway -> register the code-context MCP
+# server in it -> install the dev-workflow skills.
 #
-# Retrieval needs NO analyzer model, so this script never asks for the gateway URL or a key: after
-# it finishes you can already search and read code from the shell. Wiring the analyzer (the
-# optional `enrich`/`rollup` notes) is the CODE_CONTEXT_OPENAI_* block in .env.example.
+# Retrieval needs NO analyzer model, so the infrastructure half never asks for the gateway: after
+# it finishes you can already search and read code. The gateway is what the SHELL thinks with, and
+# it is a separate channel from the optional `enrich`/`rollup` analyzer (CODE_CONTEXT_OPENAI_* in
+# .env.example) - the same URL and key, read by two different consumers.
+#
+#   .\scripts\work-win.ps1 -Repo C:\repo -GatewayUrl https://<gateway>/v1 -Model <model-id>
+#
+# The API KEY IS NEVER A PARAMETER: a secret on a command line lands in PSReadLine history and in
+# the process list. The config gets opencode's `{env:...}` reference and the value stays in your
+# environment - the same rule llm.py follows for the analyzer tier.
 #
 # Windows-only on purpose: the work machine is Windows. The portable form of every step is the
 # manual sequence in README "Use it on a work machine" - keep the two in step.
@@ -21,7 +29,15 @@ param(
     # Skip the infrastructure half entirely - no Docker, no model pull, no indexing. For
     # re-registering the MCP server or refreshing the skills after a submodule bump.
     [switch]$WireOnly,
-    [string]$DbDsn = 'postgresql://dev:dev@localhost:5433/code_context'
+    [string]$DbDsn = 'postgresql://dev:dev@localhost:5433/code_context',
+    # The company LLM gateway, OpenAI dialect - INCLUDING the /v1 suffix, same value as
+    # CODE_CONTEXT_OPENAI_BASE_URL. Omit to leave opencode's provider config alone.
+    [string]$GatewayUrl,
+    # A model id the gateway exposes; becomes opencode's default model.
+    [string]$Model,
+    # Provider id in opencode's config (and the prefix of the model string). Deliberately generic:
+    # this repo is public, and an employer's name does not belong in a committed default.
+    [string]$ProviderId = 'work-gateway'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -30,9 +46,23 @@ Set-Location $root
 
 function Say($msg) { Write-Host ">> $msg" }
 
+function Sync-PathFromMachine {
+    $env:Path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
+                [System.Environment]::GetEnvironmentVariable('Path', 'User')
+}
+
 if ($Repo) {
     if (-not (Test-Path $Repo)) { throw "-Repo '$Repo' does not exist." }
     $Repo = (Resolve-Path $Repo).Path   # opencode gets an absolute path, whatever you typed
+}
+# A gateway without a model would write a provider nothing selects, and a model without a gateway
+# has nowhere to run. Fail here rather than half-write the config.
+if ($GatewayUrl -and -not $Model) { throw "-GatewayUrl needs -Model (the model id the gateway exposes)." }
+if ($Model -and -not $GatewayUrl) { throw "-Model needs -GatewayUrl (the gateway's /v1 base URL)." }
+if ($GatewayUrl -and $GatewayUrl -notmatch '/v\d+/?$') {
+    # The OpenAI dialect is versioned and the SDK appends only the path after it: a base URL
+    # without /v1 fails at the first call with a 404, far from the cause.
+    Write-Host "!! -GatewayUrl '$GatewayUrl' does not end in /v1 - the OpenAI dialect wants the version prefix."
 }
 
 if (-not $WireOnly) {
@@ -66,7 +96,26 @@ if (-not $WireOnly) {
     }
 }
 
-# ---------------------------------------------------------------- 4. opencode: the MCP server
+# ---------------------------------------------------------------- 4. opencode itself
+# Writing a config for a shell that isn't installed is the failure mode this check exists for:
+# every step below "succeeds" and nothing runs. winget id from `winget search opencode`.
+if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {
+    # A shell opened before the install has a stale PATH copy, and re-running winget for an
+    # already-installed package is a slow no-op with a confusing message. Re-read PATH first.
+    Sync-PathFromMachine
+}
+if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {
+    Say 'opencode not found - installing (winget SST.opencode)...'
+    winget install --id SST.opencode --accept-source-agreements --accept-package-agreements --silent
+    Sync-PathFromMachine   # winget edits the persisted PATH, not this shell's copy
+    if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {
+        Write-Host "!! opencode still not on PATH - open a new shell to pick it up (the config below is written regardless)."
+    }
+} else {
+    Say "opencode present: $((Get-Command opencode).Source)"
+}
+
+# ---------------------------------------------------------------- 5. opencode: gateway + MCP server
 $cfgDir = if ($env:XDG_CONFIG_HOME) { Join-Path $env:XDG_CONFIG_HOME 'opencode' }
           else { Join-Path $env:USERPROFILE '.config\opencode' }
 $jsonPath  = Join-Path $cfgDir 'opencode.json'
@@ -81,6 +130,27 @@ $entry = [pscustomobject]@{
     environment = [pscustomobject]$envBlock
 }
 
+# The gateway the SHELL thinks with. `@ai-sdk/openai-compatible` is opencode's driver for a plain
+# /v1/chat/completions endpoint - the same dialect llm.py's `openai:` tier speaks, so one gateway
+# serves both. The key is written as opencode's `{env:...}` reference, never as its value: this
+# file is world-readable on the box and lands in backups.
+$keyVar = 'CODE_CONTEXT_OPENAI_API_KEY'
+if ($GatewayUrl) {
+    $providerEntry = [pscustomobject]@{
+        npm     = '@ai-sdk/openai-compatible'
+        name    = 'Work LLM gateway'
+        options = [pscustomobject]@{ baseURL = $GatewayUrl; apiKey = "{env:$keyVar}" }
+        models  = [pscustomobject]@{ $Model = [pscustomobject]@{ name = $Model } }
+    }
+}
+
+# Set-or-replace on a PSCustomObject: ConvertFrom-Json gives note properties, and Add-Member throws
+# on one that already exists - which is exactly the re-run case this script promises to survive.
+function Set-Prop($obj, [string]$name, $value) {
+    if ($obj.PSObject.Properties[$name]) { $obj.$name = $value }
+    else { $obj | Add-Member -NotePropertyName $name -NotePropertyValue $value }
+}
+
 if (Test-Path $jsoncPath) {
     # A .jsonc is hand-written and may carry comments; rewriting it through ConvertTo-Json would
     # silently delete them. Print the snippet instead - your file, your edit.
@@ -88,6 +158,11 @@ if (Test-Path $jsoncPath) {
     Write-Host "!! Found $jsoncPath (comments would not survive an automatic rewrite)."
     Write-Host "   Add this entry under its top-level 'mcp' key yourself:"
     Write-Host (@{ 'code-context' = $entry } | ConvertTo-Json -Depth 10)
+    if ($GatewayUrl) {
+        # Backtick, not backslash: PowerShell's escape character inside a double-quoted string.
+        Write-Host "   ...and this one under 'provider', plus a top-level `"model`": `"$ProviderId/$Model`""
+        Write-Host (@{ $ProviderId = $providerEntry } | ConvertTo-Json -Depth 10)
+    }
     $manualEdit = $true
 } else {
     if (-not (Test-Path $cfgDir)) { New-Item -ItemType Directory -Force -Path $cfgDir | Out-Null }
@@ -103,17 +178,36 @@ if (Test-Path $jsoncPath) {
     if (-not $cfg.PSObject.Properties['mcp']) {
         $cfg | Add-Member -NotePropertyName 'mcp' -NotePropertyValue ([pscustomobject]@{})
     }
-    if ($cfg.mcp.PSObject.Properties['code-context']) {
-        $cfg.mcp.'code-context' = $entry           # idempotent: re-run updates the paths
-    } else {
-        $cfg.mcp | Add-Member -NotePropertyName 'code-context' -NotePropertyValue $entry
+    Set-Prop $cfg.mcp 'code-context' $entry        # idempotent: re-run updates the paths
+
+    if ($GatewayUrl) {
+        if (-not $cfg.PSObject.Properties['provider']) {
+            $cfg | Add-Member -NotePropertyName 'provider' -NotePropertyValue ([pscustomobject]@{})
+        }
+        Set-Prop $cfg.provider $ProviderId $providerEntry
+        # Only this provider's own default. Another provider you already configured keeps its
+        # models; what changes is which one a new session starts on.
+        Set-Prop $cfg 'model' "$ProviderId/$Model"
+        Say "provider '$ProviderId' -> $GatewayUrl (model $Model)"
     }
+
     # .NET writer, not Set-Content: PowerShell 5.1 writes UTF-8 *with* a BOM, and a BOM in front
     # of a JSON document trips strict parsers.
     [System.IO.File]::WriteAllText($jsonPath, ($cfg | ConvertTo-Json -Depth 10))
 }
 
-# ---------------------------------------------------------------- 5. opencode: the skills
+# The key never touches this script, but a missing one fails at the first prompt with an opaque
+# 401 - so check for it here, where the cause is still on screen.
+if ($GatewayUrl -and -not (Get-Item "env:$keyVar" -ErrorAction SilentlyContinue)) {
+    Write-Host ""
+    Write-Host "!! $keyVar is not set - opencode will resolve {env:$keyVar} to nothing and the gateway will 401."
+    Write-Host "   Set it for future shells (user scope, not the repo):"
+    Write-Host "     setx $keyVar `"<your-key>`""
+    Write-Host "   ...and for THIS shell:  `$env:$keyVar = '<your-key>'"
+    Write-Host "   The same variable is what the optional analyzer tier reads - one gateway, one key."
+}
+
+# ---------------------------------------------------------------- 6. opencode: the skills
 # opencode only discovers skills in six fixed locations - a submodule under tools/ is not one of
 # them, so they have to be installed. Global (not .opencode/ inside your work repo): these are
 # your workflow, not that repository's, and they must not end up in its diff.
@@ -143,7 +237,19 @@ if ($manualEdit) {
 }
 Write-Host "   Restart opencode, then ask it something like 'search the codebase for the retry policy'."
 Write-Host "   Tools now available: search_code, get_file, find_usages, get_deps, search_docs, find_convention."
+if (-not $GatewayUrl) {
+    Write-Host ""
+    Write-Host "!! No -GatewayUrl given: opencode's own model is NOT configured by this run."
+    Write-Host "   The MCP tools are wired, but the shell has nothing to think with until you either"
+    Write-Host "   re-run with -GatewayUrl https://<gateway>/v1 -Model <model-id>, or configure a"
+    Write-Host "   provider yourself (opencode: /models)."
+}
 Write-Host ""
 Write-Host "   After a reboot, bring the database back with:  .\scripts\start-win.ps1"
 Write-Host "   Re-index after big branch changes:             uv run python -m code_context.dev index <repo>"
 Write-Host "   Optional semantic notes through your gateway:  see CODE_CONTEXT_OPENAI_* in .env.example"
+
+# Reaching here means every step ran (a real failure throws under ErrorActionPreference='Stop').
+# Without this the script inherits $LASTEXITCODE from the last native call - winget returns
+# non-zero for "already installed", which would read as a failed setup to anything scripting this.
+exit 0

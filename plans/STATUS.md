@@ -284,6 +284,24 @@ slice cost us to learn.
   of the engine brought it back and pgvector with it. That is the second occurrence; if it becomes
   routine the answer is an external-DSN path in the scripts, not a third manual restart.
 
+- **`CODE_CONTEXT_DEFAULT_REPO` is a name, not a path (defect fix) — DONE.** The wiring slice above
+  wrote the target repo's **absolute path** into the MCP entry, and the README had said the same
+  since D-4. But `index_repo` stores `Path(repo_path).name` and `_repo_clause` compares it exactly,
+  so the configured scope matched **no row**: all six tools returned empty on a fully populated
+  index. That is the worst shape a misconfiguration can take — it reads as "nothing is indexed",
+  so the next move is to re-index rather than to look at the filter. Measured on the live index
+  before the fix: the path form returned **0** results, the name form **10**.
+  Fixed in `work-win.ps1` (`Split-Path $Repo -Leaf`), the README (both the JSON example and the
+  §Scope-your-queries bullet) and `.env.example`. **Drift-lint check 8** now owns it: any
+  `CODE_CONTEXT_DEFAULT_REPO` example in `README.md` / `scripts/` / `.env.example` whose value
+  contains a slash or a backslash fails, and the script must still build the value with
+  `Split-Path -Leaf`. Verified red in both halves and restored green.
+  **No unit test, deliberately:** the drift was in a PowerShell script and two documents, which no
+  Python test can see, and the behaviour it would assert (an exact string compare) is not in doubt.
+  The lint is the guard; the golden lane already drives the real naming end to end.
+  *Why it slipped:* the wiring slice was verified by reading the config it wrote, never by asking
+  the running server for a result — "the file has the right shape" is not "the tool answers".
+
 ## Next
 **Owner's call pending** between #1 and #2 below — both are ready to start, and #2 needs hardware we
 do not have here.

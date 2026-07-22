@@ -152,13 +152,38 @@ model; this repo gives that shell hands in the codebase over MCP.** Two facts ma
   a remote one changes `embed_dim` *and* the `vector(N)` column, i.e. a migration and a full
   re-index — not a price worth paying to get started.
 
-**0. Before you index a work repository, read [`scrub-identity`](tools/agent-skills/skills/scrub-identity/SKILL.md)
+### From a clone to a working shell
+
+The work machine is somebody else's Windows box, so start from zero:
+
+```powershell
+git clone --recurse-submodules https://github.com/fedoroff-vlad/coding-agent
+cd coding-agent
+.\scripts\work-win.ps1                    # asks which repository to index
+```
+
+Two prerequisites the script installs *neither* of, because both want a reboot or an administrator
+on a managed machine — it checks for them first and names them rather than failing later:
+
+```powershell
+winget install --id Docker.DockerDesktop   # the pgvector container runs on it
+winget install --id Ollama.Ollama          # local embeddings (no analyzer model needed)
+```
+
+Everything else it does handle: `uv` and the Python env, the database and its migrations, the embed
+model, opencode itself, the MCP registration and the skills. If you cloned without
+`--recurse-submodules` it initialises the submodule for you.
+
+**Before you index a work repository, read [`scrub-identity`](tools/agent-skills/skills/scrub-identity/SKILL.md)
 and fill in `.private-terms`.** This repo is public. Indexing writes markdown notes into the target
 repo (`.code-context/notes/`), and an internal hostname or a service name in a commit, doc or
 fixture identifies an employer as surely as a name does. This repository already had to be
 recreated over exactly that — GitHub serves `refs/pull/<N>/head` forever, so no force-push undoes it.
+**Neither half of that guard survives a clone** — the terms file is gitignored (a published denylist
+is the leak, with an index attached) and the hook lives in `.git/hooks/`. The script installs the
+hook and then warns until you supply the terms; carry them between machines out of band.
 
-**Then one command** ([`scripts/work-win.ps1`](scripts/work-win.ps1)) — dev session (Docker, uv,
+**The one command in full** ([`scripts/work-win.ps1`](scripts/work-win.ps1)) — dev session (Docker, uv,
 Ollama, pgvector, migrations) → the embed model → index your repo → install opencode → point it at
 your gateway → register the MCP server in it → install the dev-workflow skills. Idempotent;
 re-running is also how you refresh the skills after a submodule bump.

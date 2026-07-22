@@ -107,13 +107,54 @@ if ((Test-Path (Join-Path $root '.git')) -and -not (Test-Path $hook)) {
         (New-Object System.Text.UTF8Encoding $false))
     Say 'installed the private-terms pre-commit hook (.git/hooks/pre-commit)'
 }
-if (-not (Test-Path (Join-Path $root '.private-terms'))) {
+$termsFile = Join-Path $root '.private-terms'
+if (-not (Test-Path $termsFile)) {
+    # Write the file, don't just ask for it. "Create a denylist" is a blank page and a judgement
+    # call about what counts as identifying; a template with the CATEGORIES filled in turns it into
+    # a two-minute fill-in. Every line is a comment, so the checker still reports "lists no terms"
+    # and keeps refusing commits until a real term is added - a template must not read as done.
+    [System.IO.File]::WriteAllText($termsFile, (@(
+        '# .private-terms - local denylist for check-private-terms (the scrub-identity skill).',
+        '#',
+        '# NEVER COMMIT THIS FILE. It is gitignored, and that is the point: a published list of',
+        '# what you are hiding is the leak itself, with an index attached. Carry it between',
+        '# machines out of band - not through this repo, not through anything with a history.',
+        '#',
+        '# One literal term per line, case-insensitive substring match. Uncomment and fill in;',
+        '# lines starting with # are ignored, so the file below currently protects NOTHING.',
+        '',
+        '# --- The employer, in EVERY spelling you might type ---',
+        '# Both alphabets, the legal form, the abbreviation, the way it appears in a package name.',
+        '# <company name>',
+        '# <Company Name in Latin>',
+        '# <ABBR>',
+        '',
+        '# --- Internal domains and hostnames ---',
+        '# The LLM gateway, the wiki, the registry, anything .local / .corp / .internal.',
+        '# <company>.example.internal',
+        '',
+        '# --- Internal system and service names ---',
+        '# The ones that appear in package paths and class names - these leak through a quoted',
+        '# stack trace or an example far more often than the company name does.',
+        '# <internal-service-name>',
+        '',
+        '# --- Confluence space keys, repository names, team names ---',
+        '# <SPACEKEY>',
+        '',
+        '# --- Domain vocabulary that identifies the industry ---',
+        '# A "synthetic" fixture written in the vocabulary of one industry names its owner almost',
+        '# as precisely as a logo would.',
+        '# <domain term>',
+        ''
+    ) -join "`n"), (New-Object System.Text.UTF8Encoding $false))
+    Say "wrote a .private-terms template - FILL IT IN (it is gitignored and protects nothing yet)"
+}
+if (-not (Get-Content $termsFile | Where-Object { $_ -notmatch '^\s*(#|$)' })) {
     Write-Host ""
-    Write-Host "!! No .private-terms file - this repo is PUBLIC and nothing is guarding it."
-    Write-Host "   Create it (gitignored, one term per line): the employer's name in every spelling,"
-    Write-Host "   internal domains and hostnames, internal service names, Confluence space keys."
-    Write-Host "   Copy it from your other machine out of band - never through the repo."
-    Write-Host "   Until it exists, every commit here is refused by the hook. See the scrub-identity skill."
+    Write-Host "!! .private-terms has no terms yet - this repo is PUBLIC and nothing is guarding it."
+    Write-Host "   Open it and uncomment/fill the categories: $termsFile"
+    Write-Host "   Until then every commit here is refused by the hook, which is the intended state."
+    Write-Host "   Background: tools/agent-skills/skills/scrub-identity/SKILL.md"
 }
 
 if (-not $WireOnly) {

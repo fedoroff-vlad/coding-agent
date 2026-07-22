@@ -329,6 +329,18 @@ slice cost us to learn.
   like the `opencode.json` writer above. Verified in the clone: submodule populated, hook LF and
   running, 11 skills installed, exit 0, and the prompt correctly silent under a redirected stdin.
 
+- **The setup writes the `.private-terms` template instead of asking for one — DONE.** "Create a
+  denylist" is a blank page plus a judgement call about what counts as identifying, which is how a
+  security step becomes the step everyone postpones. The setup now writes the file with the
+  **categories** spelled out (employer names in every spelling and both alphabets, internal domains,
+  internal service names — the ones that leak through a quoted stack trace — Confluence space keys,
+  industry vocabulary), so filling it in is a two-minute edit. **Every line of the template is a
+  comment**: the checker still reports "lists no terms", commits stay refused, and the script
+  repeats the warning on every run — a template that read as *done* would be worse than no file,
+  because it looks like protection. Existing files are never overwritten. Verified in the scratch
+  clone: template written, warning on a comments-only file, silent once a real term is added, and
+  the term survives a re-run.
+
 ## Next
 **Owner's call pending** between #1 and #2 below — both are ready to start, and #2 needs hardware we
 do not have here.

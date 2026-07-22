@@ -180,8 +180,12 @@ repo (`.code-context/notes/`), and an internal hostname or a service name in a c
 fixture identifies an employer as surely as a name does. This repository already had to be
 recreated over exactly that — GitHub serves `refs/pull/<N>/head` forever, so no force-push undoes it.
 **Neither half of that guard survives a clone** — the terms file is gitignored (a published denylist
-is the leak, with an index attached) and the hook lives in `.git/hooks/`. The script installs the
-hook and then warns until you supply the terms; carry them between machines out of band.
+is the leak, with an index attached) and the hook lives in `.git/hooks/`. So the script installs the
+hook and **writes a `.private-terms` template** with the categories spelled out — employer names in
+every spelling, internal domains, internal service names, Confluence space keys, industry
+vocabulary — for you to fill in. Every line in it is a comment, so it protects nothing until you
+edit it, and the script keeps saying so on each run; commits stay refused meanwhile, which is the
+intended state. Carry the real terms between machines out of band.
 
 **The one command in full** ([`scripts/work-win.ps1`](scripts/work-win.ps1)) — dev session (Docker, uv,
 Ollama, pgvector, migrations) → the embed model → index your repo → install opencode → point it at

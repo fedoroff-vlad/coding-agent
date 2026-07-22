@@ -122,7 +122,10 @@ $jsonPath  = Join-Path $cfgDir 'opencode.json'
 $jsoncPath = Join-Path $cfgDir 'opencode.jsonc'
 
 $envBlock = [ordered]@{ CODE_CONTEXT_DB_DSN = $DbDsn }
-if ($Repo) { $envBlock['CODE_CONTEXT_DEFAULT_REPO'] = $Repo }  # one index can hold several repos
+# The repo IDENTIFIER, not the path: the indexer stores `Path(repo_path).name` and the scope
+# filter is an exact string compare, so a path here matches no row and every tool silently
+# returns nothing - the worst failure shape, since the setup looks complete.
+if ($Repo) { $envBlock['CODE_CONTEXT_DEFAULT_REPO'] = (Split-Path $Repo -Leaf) }
 $entry = [pscustomobject]@{
     type        = 'local'
     command     = @('uv', 'run', '--directory', $root, 'code-context')

@@ -118,6 +118,26 @@ for t in $terms; do
   fi
 done
 
+# ── Check 8: CODE_CONTEXT_DEFAULT_REPO is documented/written as a NAME, never a path ───
+# The indexer stores `Path(repo_path).name` and _repo_clause compares it exactly, so a path in
+# this variable matches no row: every tool returns an empty result on a fully populated index,
+# which reads as "nothing indexed" rather than as a misconfiguration. work-win.ps1 and the README
+# both shipped a path. Path-shaped = contains a slash or a drive letter.
+echo "check 8: CODE_CONTEXT_DEFAULT_REPO values are repo names, not paths"
+default_repo_vals="$(grep -rhoE "CODE_CONTEXT_DEFAULT_REPO['\"]? *[=:] *['\"][^'\"]+['\"]" \
+  README.md scripts/ .env.example 2>/dev/null || true)"
+if printf '%s\n' "$default_repo_vals" | grep -qE '[=:] *["'"'"'][^"'"'"']*[/\\]'; then
+  err "a CODE_CONTEXT_DEFAULT_REPO example looks like a PATH:"
+  printf '%s\n' "$default_repo_vals" | grep -E '[=:] *["'"'"'][^"'"'"']*[/\\]' | sed 's/^/        /' >&2
+  err "→ use the indexed directory's leaf name (dev index C:\\src\\my-repo → 'my-repo')"
+fi
+# The script builds the value rather than quoting one, so assert the leaf-name call is still there.
+if grep -q 'CODE_CONTEXT_DEFAULT_REPO' scripts/work-win.ps1 \
+   && ! grep -q "CODE_CONTEXT_DEFAULT_REPO'\] = (Split-Path \$Repo -Leaf)" scripts/work-win.ps1; then
+  err "work-win.ps1 sets CODE_CONTEXT_DEFAULT_REPO without (Split-Path \$Repo -Leaf)"
+  err "→ the MCP entry must carry the repo NAME; a path there empties every tool"
+fi
+
 echo ""
 if [ "$fail" -ne 0 ]; then
   echo "consistency check FAILED — resolve the ✗ items above." >&2

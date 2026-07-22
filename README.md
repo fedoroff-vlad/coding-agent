@@ -42,8 +42,8 @@ From a fresh clone:
    Three things worth knowing before the first real run:
 
    - **Scope your queries.** Every tool takes a `repo` argument and falls back to
-     `CODE_CONTEXT_DEFAULT_REPO`. Set it as soon as the index holds more than one project, or
-     queries will mix them.
+     `CODE_CONTEXT_DEFAULT_REPO` — the repo's **name** (the indexed directory's leaf name), never
+     its path. Set it as soon as the index holds more than one project, or queries will mix them.
    - **`enrich` / `rollup` need a model** — `CODE_CONTEXT_NOTES_MODEL` / `CODE_CONTEXT_ROLLUP_MODEL`
      (e.g. `qwen3:8b` on the dev box; the prod default is the resident `qwen3-coder:30b`). Run
      `rollup` after `enrich`.
@@ -240,7 +240,7 @@ the whole repo in its window, which is the entire point:
       "type": "local",
       "command": ["uv", "run", "--directory", "/path/to/coding-agent", "code-context"],
       "environment": {
-        "CODE_CONTEXT_DEFAULT_REPO": "/path/to/your/repo",
+        "CODE_CONTEXT_DEFAULT_REPO": "your-repo",
         "CODE_CONTEXT_DB_DSN": "postgresql://dev:dev@localhost:5433/code_context"
       }
     }
@@ -249,7 +249,11 @@ the whole repo in its window, which is the entire point:
 ```
 
 `CODE_CONTEXT_DEFAULT_REPO` matters: one index can hold several repos, and an unscoped query mixes
-them — a wrong answer rather than a wide one.
+them — a wrong answer rather than a wide one. **Its value is the repo's *name*, not its path**:
+`dev index C:\src\my-monorepo` stores the fragments under `my-monorepo`, and the scope filter is an
+exact string compare — a path there matches no row, so every tool returns nothing while the setup
+looks complete. (That is not hypothetical: this file said `/path/to/your/repo` until a live check
+returned 0 results for the path and 10 for the name.)
 
 **Skills.** opencode discovers `SKILL.md` only in six fixed locations, and a submodule under
 `tools/` is not one of them, so the skills in [`tools/agent-skills/`](tools/agent-skills) have to be

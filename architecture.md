@@ -47,8 +47,11 @@ context layers (REFERENCE §3, roadmap §Architecture):
 2. **RAG (machine-built — this component):** code + docs → a derived pgvector + edge-graph index,
    pulled as a narrow slice on demand.
 3. **Shell (reused):** **opencode** drives the loop — decision D, closed 2026-07-21 (roadmap
-   §Open decisions). It is registered as an MCP client of this server; see
-   [`scripts/work-win.ps1`](scripts/work-win.ps1) and README §Use it on a work machine.
+   §Open decisions). It is registered as an MCP client of this server, and it reaches the model it
+   thinks with through an `@ai-sdk/openai-compatible` **provider** block — the same OpenAI-dialect
+   gateway `llm.py`'s `openai:` tier calls, so one URL and one key serve both, and the key is a
+   `{env:…}` reference rather than a literal in either. Both halves are written by
+   [`scripts/work-win.ps1`](scripts/work-win.ps1); see README §Use it on a work machine.
 
 ### Data flow (current)
 

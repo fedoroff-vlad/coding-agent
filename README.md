@@ -159,22 +159,62 @@ fixture identifies an employer as surely as a name does. This repository already
 recreated over exactly that — GitHub serves `refs/pull/<N>/head` forever, so no force-push undoes it.
 
 **Then one command** ([`scripts/work-win.ps1`](scripts/work-win.ps1)) — dev session (Docker, uv,
-Ollama, pgvector, migrations) → the embed model → index your repo → register the MCP server in
-opencode → install the dev-workflow skills. Idempotent; re-running is also how you refresh the
-skills after a submodule bump.
+Ollama, pgvector, migrations) → the embed model → index your repo → install opencode → point it at
+your gateway → register the MCP server in it → install the dev-workflow skills. Idempotent;
+re-running is also how you refresh the skills after a submodule bump.
 
 ```powershell
-.\scripts\work-win.ps1 -Repo C:\path\to\your\monorepo
+.\scripts\work-win.ps1 -Repo C:\path\to\your\monorepo -GatewayUrl https://<gateway>/v1 -Model <model-id>
 .\scripts\work-win.ps1 -Repo C:\path\to\repo -SkipIndex   # everything but the slow indexing
 .\scripts\work-win.ps1 -WireOnly                          # just opencode: re-register + refresh skills
 ```
 
 It pulls **only `nomic-embed-text`** (~274 MB), not the analyzer models — a machine driving a
-company gateway needs none of them — and it never asks for that gateway's URL or key, because
-retrieval does not use one. It also **merges** into an existing `opencode.json` (backing it up
-first) rather than overwriting the provider config that makes your work model reachable; if you
-keep an `opencode.jsonc`, it prints the entry for you to paste instead, because an automatic
-rewrite would delete your comments.
+company gateway needs none of them. It also **merges** into an existing `opencode.json` (backing it
+up first) rather than overwriting a provider config that is already there; if you keep an
+`opencode.jsonc`, it prints the entries for you to paste instead, because an automatic rewrite
+would delete your comments.
+
+### The gateway: what the shell thinks with
+
+Two different things reach that gateway, and it is worth keeping them apart:
+
+| consumer | what it is for | how it is configured |
+|---|---|---|
+| **opencode** | the model the *agent* reasons with — every prompt you type | a `provider` block in `opencode.json` (below) |
+| **this repo's analyzer** | the optional `enrich` / `rollup` notes written at index time | `CODE_CONTEXT_OPENAI_*` + an `openai:`-prefixed model |
+
+Same URL, same key, two processes. `-GatewayUrl … -Model …` writes the provider half:
+
+```json
+{
+  "provider": {
+    "work-gateway": {
+      "npm": "@ai-sdk/openai-compatible",
+      "options": { "baseURL": "https://<gateway>/v1", "apiKey": "{env:CODE_CONTEXT_OPENAI_API_KEY}" },
+      "models": { "<model-id>": { "name": "<model-id>" } }
+    }
+  },
+  "model": "work-gateway/<model-id>"
+}
+```
+
+**The key is never a script parameter and never a literal in that file** — a secret on a command
+line lands in PSReadLine history and in the process list, and the config file is world-readable on
+the box and rides along in backups. opencode resolves `{env:…}` at start, so the value lives in
+your environment only:
+
+```powershell
+setx CODE_CONTEXT_OPENAI_API_KEY "<your-key>"    # future shells
+$env:CODE_CONTEXT_OPENAI_API_KEY = "<your-key>"  # this one
+```
+
+The base URL must carry the `/v1` (the script warns if it does not — without it the first call
+404s far from the cause), and neither the URL nor the key belongs in a commit: **this repo is
+public and an internal hostname identifies an employer as surely as a name does.**
+
+The same mechanism is how the **Mac** profile works — a second provider pointing at local Ollama
+(`http://localhost:11434/v1`, any key), switched with `/models`. One config, two providers.
 
 Windows only, deliberately — that is the work machine. The portable form is the same steps by hand:
 
@@ -187,9 +227,11 @@ uv run python -m code_context.dev index /path/to/your/repo
 uv run python -m code_context.dev search "where is the retry policy"
 ```
 
-plus this in `~/.config/opencode/opencode.json` (the shell then has `search_code` / `get_file` /
-`find_usages` / `get_deps` / `search_docs` / `find_convention` — a narrow slice of the codebase on
-demand instead of the whole repo in its window, which is the entire point):
+plus opencode itself (`winget install SST.opencode`, `brew install sst/tap/opencode`, or the
+installer from [opencode.ai](https://opencode.ai)), the `provider` block above, and this in
+`~/.config/opencode/opencode.json` — the shell then has `search_code` / `get_file` / `find_usages` /
+`get_deps` / `search_docs` / `find_convention`, a narrow slice of the codebase on demand instead of
+the whole repo in its window, which is the entire point:
 
 ```json
 {

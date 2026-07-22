@@ -9,6 +9,7 @@
 				{ "PackageIdentifier": "Ollama.Ollama" },
 				{ "PackageIdentifier": "Docker.DockerDesktop" },
 				{ "PackageIdentifier": "Anthropic.ClaudeCode" },
+				{ "PackageIdentifier": "SST.opencode" },
 				{ "PackageIdentifier": "Microsoft.VisualStudioCode" },
 				{ "PackageIdentifier": "JetBrains.PyCharm.Professional" },
 				{ "PackageIdentifier": "JetBrains.DataGrip" },

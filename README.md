@@ -19,8 +19,8 @@ only ~8–20k of relevant context instead of the whole repo. This is what makes 
 > corpus — plus **LLM notes**: `enrich` annotates each non-trivial class with a semantic note, and
 > `rollup` synthesizes those bottom-up into directory/module/project notes (md-as-source →
 > retrievable fragments). Agent-shell integration is next (see [Status](#status)) — you can't drive
-> a full coding session yet, but you can index a Java repo, ingest its Confluence export, enrich +
-> roll it up, and semantically search + navigate both.
+> a full coding session yet, but you can index a Java repo, sync its Confluence space over the REST
+> API, enrich + roll it up, and semantically search + navigate both.
 
 From a fresh clone:
 
@@ -93,9 +93,9 @@ repo is its MCP server; `scripts/work-win.ps1` registers it and installs the ski
 
 **What is deliberately not built yet:** the Step-0 onboarding kit (C-5), the authored
 `AGENTS.md`/OpenSpec layer (C-7), and the Java sidecar that would replace simple-name matching (C-8).
-Inside shipped phases one thing stays open: the docs front reads an exported corpus (HTML, `.docx`
-and text-layer `.pdf`; OCR for scans and Confluence REST sync deferred) rather than syncing
-Confluence itself. Analyzer escalation now ships as a config change — the model string picks the engine: `anthropic:…`
+Inside shipped phases one thing stays open: **OCR for scanned PDFs** — the docs front reads an
+exported corpus (HTML, `.docx`, text-layer `.pdf`) *and* now syncs a Confluence space over the REST
+API (decision B, incremental on `version.number`), but a scan is reported rather than ingested blank. Analyzer escalation now ships as a config change — the model string picks the engine: `anthropic:…`
 runs on the Messages API (`uv sync --extra cloud`), `openai:…` on an **OpenAI-dialect company
 gateway** (`CODE_CONTEXT_OPENAI_BASE_URL`, no extra needed — see §Use it on a work machine), and a
 bare tag stays on local Ollama, which is still the default.
@@ -284,6 +284,27 @@ them — a wrong answer rather than a wide one. **Its value is the repo's *name*
 exact string compare — a path there matches no row, so every tool returns nothing while the setup
 looks complete. (That is not hypothetical: this file said `/path/to/your/repo` until a live check
 returned 0 results for the path and 10 for the name.)
+
+**Confluence.** The wiki syncs over the REST API — no manual export:
+
+```sh
+export CODE_CONTEXT_CONFLUENCE_BASE_URL=https://<your-wiki>          # Cloud: https://<site>.atlassian.net
+export CODE_CONTEXT_CONFLUENCE_API_PATH=rest/api                     # Cloud: wiki/rest/api
+export CODE_CONTEXT_CONFLUENCE_TOKEN=...                             # env only, never a file in the repo
+# export CODE_CONTEXT_CONFLUENCE_EMAIL=you@example.com               # Cloud only — switches to Basic
+uv run python -m code_context.dev confluence-sync SPACEKEY ./wiki-corpus my-repo
+```
+
+It **syncs to disk and then ingests**: each page is written as HTML into the corpus directory and
+the existing docs pass runs over it, so the archive stays the greppable, diffable Layer-1 record the
+notes and `.docx`/`.pdf` passes already keep — and a failed sync cannot corrupt the index. Drop the
+last argument to sync only and inspect the corpus before anything is embedded.
+
+Re-runs are incremental on Confluence's own `version.number`; renamed pages keep one file (the id
+leads the filename), deleted pages are removed from the corpus. Pass the **code repo's name** as the
+last argument so docs and code share a scope — that is what lets `find_convention` answer "which
+rule governs this class". Auth follows the edition: a Data Center **Personal Access Token** is sent
+as `Bearer`, and setting the email switches to Cloud's Basic (email + API token).
 
 **Give the shell its instructions.** Wiring the tools is not the same as getting them used: with no
 rules file, opencode falls back to opening and grepping files — the whole-repo-in-the-window habit

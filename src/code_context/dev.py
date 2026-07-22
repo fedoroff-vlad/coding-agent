@@ -8,6 +8,7 @@
     python -m code_context.dev rollup <repo-path> # bottom-up dir/module/project notes over the leaves
     python -m code_context.dev ingest <docs-path> [repo]  # docs (HTML/.docx/.pdf) -> fragments (no LLM)
     python -m code_context.dev link <repo>       # doc -> class 'mentions' edges (re-run after re-index)
+    python -m code_context.dev confluence-sync <SPACE> <dest-dir> [repo]  # wiki -> HTML corpus (+ingest)
     python -m code_context.dev agents-md <repo-path> [--force]  # starter AGENTS.md in the TARGET repo
     python -m code_context.dev search <query>     # semantic search over the index
 
@@ -89,6 +90,22 @@ def link(repo: str) -> int:
     return 0
 
 
+def confluence_sync(space: str, dest_path: str, repo: str | None = None) -> int:
+    from . import confluence
+    from .indexer import ingest_docs, link_docs
+
+    stats = confluence.sync_space(space, dest_path)
+    print(f"confluence-sync ok: {stats} -> {dest_path}")
+    if repo is None:
+        # Sync and ingest stay separable: a corpus on disk is inspectable before anything is
+        # embedded, and that is the whole point of keeping the archive as Layer 1.
+        print(f"   next: python -m code_context.dev ingest {dest_path} <repo>   # then: link <repo>")
+        return 0
+    print(f"ingest: {ingest_docs(dest_path, repo)}")
+    print(f"link: {link_docs(repo)}")
+    return 0
+
+
 def agents_md(repo_path: str, *flags: str) -> int:
     from . import agents_md as _agents_md
 
@@ -128,6 +145,7 @@ COMMANDS = {
     "rollup": rollup,
     "ingest": ingest,
     "link": link,
+    "confluence-sync": confluence_sync,
     "agents-md": agents_md,
     "search": search,
     "usages": usages,

@@ -94,7 +94,7 @@ column honest at every slice closer — a roadmap that says less than STATUS is 
 | **C-0** | Foundation: this roadmap + a light `architecture.md`; repo scaffold; the DB decision | ✅ done (#1, #2) | own `code.*` schema on an isolated pgvector dev DB; prod rides ai-life's Postgres |
 | **C-1** | project-knowledge MCP skeleton: `code.*` schema (pgvector + a plain `code.edge` table; AGE dropped — see architecture.md) + tool contracts (`search_code`, `get_file`, `find_usages`, `get_deps`, `find_convention`, `search_docs`) + a stub indexer | ✅ done | all six contracts are implemented as of D-4 — no stubs left on the surface |
 | **C-2** | Code indexer: tree-sitter chunking (universal) → embeddings + graph edges (calls/imports/deps); incremental | ✅ done | deep Java semantics → Java sidecar (C-8); proven on ai-life memory-service + a production Java service |
-| **C-3** | Docs/Confluence indexer + linking doc-rule ↔ code | ✅ done (D-1…D-7, #36–#39, #44, #45) | Exported corpus: HTML + `.docx` + text-layer `.pdf` (binaries converted to markdown and archived as Layer 1). OCR for scans, Confluence REST sync, and LLM distillation into `AGENTS.md` (0.3) deliberately deferred |
+| **C-3** | Docs/Confluence indexer + linking doc-rule ↔ code | ✅ done (D-1…D-7, #36–#39, #44, #45) + **REST sync** | Exported corpus: HTML + `.docx` + text-layer `.pdf` (binaries converted to markdown and archived as Layer 1), **plus a Confluence REST sync** that fetches a space into the same corpus (decision B closed). Still deferred: OCR for scans, and LLM distillation into `AGENTS.md` (0.3) — the `AGENTS.md` *starter* shipped separately under C-7 |
 | **C-4** | Index-time enrichment (Opus): the 0.2 analysis as an automated pass → summaries/relations | ✅ done (C-4a + C-4b + escalation) | "pay once for quality". Leaf notes + bottom-up rollups default to local; escalating a tier is a **config change** — prefix the model `anthropic:` (`[cloud]` extra) and `llm.py` routes it to the Messages API. Not yet driven against the live API |
 | **C-5** | Onboarding kit: package Step 0 (0.1–0.5) into a runnable sequence / skills | ○ next up | makes onboarding a new project a command. Needs the owner's real monorepo + Confluence access |
 | **C-6** | Shell integration: wire the reused agent (**opencode**) → MCP + the analyzer tiers | ◐ partly done | **Decision D closed: opencode.** The **work profile is complete** — `scripts/work-win.ps1` installs opencode, writes the `@ai-sdk/openai-compatible` provider for the company gateway (key by `{env:…}`), registers the MCP server and installs the skills. What remains is the *Mac* profile — the same provider against local Ollama's `/v1` and `qwen3-coder:30b` — which needs the Mac |
@@ -111,7 +111,12 @@ project without a plugin still onboards on the generic RAG, just shallower.
 ## Open decisions (closed within slices)
 - **A. RAG granularity + retrieval** — a hierarchy (file→class→method) + graph hops, to pull the *connected*
   minimum rather than top-k similar. The heart of "small context → a competent answer".
-- **B. Confluence ingest** — manual export/drop first, later a REST API sync.
+- **B. Confluence ingest — CLOSED 2026-07-22: both.** Manual export/drop shipped with C-3 and stays
+  (it is the offline path, and the only one for a space you cannot reach over the API); the **REST
+  sync** now ships alongside it (`confluence.py` + `dev confluence-sync`). It syncs *to disk* and
+  hands the corpus to the same `ingest_docs`, so there is one ingest path, the archive stays the
+  Layer-1 record, and a failed sync cannot corrupt the index. Incremental on Confluence's own
+  `version.number`. Not yet driven against a live wiki — the real one is behind the work network.
 - **C. DB** — shared ai-life Postgres (schema `code.*`) vs separate. Leaning shared.
 - **D. Shell — CLOSED 2026-07-21: opencode.** Chosen by adoption rather than by a head-to-head
   bake-off, and worth being honest about that: the owner rolled it out on the work machine against

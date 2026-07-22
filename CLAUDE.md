@@ -55,10 +55,21 @@ on release (end of run / idle TTL / atexit). Opt-in, default OFF — with the fl
 and either contour runs standalone. An unconfirmed downshift *fails* the run, so it stays off until
 ai-life ships `/v1/model-profile` (LC-4).
 
+Plus the **work profile of the shell (C-6)**: `scripts/work-win.ps1` installs opencode, writes its
+provider block for the company gateway (key as `{env:…}`, never a literal), registers this MCP
+server, installs the skills, and is clone-ready — it inits the submodule, asks for the repo path and
+installs the private-terms guard. Plus **C-7's first stone**: `dev agents-md` writes a starter
+`AGENTS.md` into the *target* repo (retrieval protocol + an index-derived map; every convention a
+TODO, because an invented rule is authoritative-looking text an agent will follow). Plus the
+**Confluence REST sync** (decision B): `dev confluence-sync` fetches a space to disk and hands it to
+the unchanged `ingest_docs`, incremental on `version.number`.
+
 **Next:** a semi-manual Step 0 on the owner's real Java monorepo (C-5 — needs the repo + Confluence),
 or first the golden-lane gaps the real-repo run exposed (needs a live model, so realistically the Mac).
-**Still open inside shipped phases:** OCR for scanned PDFs + Confluence REST sync + `AGENTS.md`
-distillation (C-3 residue). Live detail → `plans/STATUS.md` (the source of truth; keep in sync).
+**Still open inside shipped phases:** OCR for scanned PDFs + `AGENTS.md` *distillation* from wiki
+pages (the starter shipped; distilling needs a model). **Built but never driven live:** the cloud
+analyzer tier, the lifecycle handshake against a real gateway, and the Confluence sync against a
+real wiki. Live detail → `plans/STATUS.md` (the source of truth; keep in sync).
 
 ## Language convention (mirrors ai-life)
 - **All repository `.md` files are English (canonical)** — plans, README, everything committed. This is the

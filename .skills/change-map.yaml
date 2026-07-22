@@ -104,6 +104,24 @@ couplings:
       parameter and never a literal in opencode.json — it is `{env:CODE_CONTEXT_OPENAI_API_KEY}`,
       resolved from the environment, for the same reason llm.py keeps it out of Settings.
 
+  - id: confluence-sync
+    trigger: Changed the Confluence REST sync (endpoints, auth, incremental key, file naming)
+    ssot: src/code_context/confluence.py
+    must_update:
+      - tests/test_confluence.py   # MockTransport, never a live wiki — see the notes
+      - .env.example               # every CODE_CONTEXT_CONFLUENCE_* knob (drift-lint check 6)
+      - architecture.md            # §Docs ingest source + the package-layout row
+      - README.md                  # the work-machine runbook's Confluence block
+      - src/code_context/dev.py    # the `confluence-sync` usage line
+    notes: >
+      The sync writes to disk and hands the corpus to the existing ingest_docs — keep that seam.
+      A second ingest path would duplicate the embedding, the incremental hash and the pruning,
+      and would break the rule that the archive is the Layer-1 record. Tests run against an
+      httpx.MockTransport: the real wiki is behind a corporate network, and the guards worth
+      pinning (pagination termination, version-based skip, rename, deletion) are exactly what a
+      live smoke test on a quiet space would NOT exercise. The token is env-only
+      (CODE_CONTEXT_CONFLUENCE_TOKEN), and the base URL is a private term — never commit a real one.
+
   - id: agents-md-starter
     trigger: Changed the generated AGENTS.md (its sections, the map, or what it claims)
     ssot: src/code_context/agents_md.py

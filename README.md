@@ -47,7 +47,9 @@ From a fresh clone:
      its path. Set it as soon as the index holds more than one project, or queries will mix them.
    - **`enrich` / `rollup` need a model** — `CODE_CONTEXT_NOTES_MODEL` / `CODE_CONTEXT_ROLLUP_MODEL`
      (e.g. `qwen3:8b` on the dev box; the prod default is the resident `qwen3-coder:30b`). Run
-     `rollup` after `enrich`.
+     `rollup` after `enrich`. Notes are built from **signatures only** by default; for a repo you
+     trust as much as your own working tree, `CODE_CONTEXT_NOTES_INCLUDE_BODIES=1` feeds method
+     bodies for richer notes (relaxes the signatures-only invariant — architecture.md §Security).
    - **`ingest` needs no model at all** (parse → embed → link), so the docs half runs comfortably on
      a CPU-only box. Pass the **code repo's name** as its second argument so docs and code share one
      scope — that is what lets `link` connect a rule to the class it governs. `ingest` links as its

@@ -383,17 +383,27 @@ obey it. Claiming more than that here would be a gate nobody implements.
 | `fragment.source` | what it is | how much of it can an attacker write | what we do |
 |---|---|---|---|
 | `facts` | code parsed out of the repo under work | all of it — it is somebody's source file | nothing, and honestly: **an agent working in a repo reads that repo.** A hostile comment in the code it was asked to change is not a boundary this component can create |
-| `llm` | notes a model wrote **from signatures only** | nothing, if the invariant below holds | the invariant is enforced by a test, not by intention |
+| `llm` | notes a model wrote **from signatures only** (by default) | nothing, while the default invariant holds | the invariant is enforced by a test, not by intention; a per-run trusted-repo opt-in (below) relaxes it deliberately |
 | `docs` | ingested wiki pages | all of it — anyone can edit a wiki | tagged `source`/`trust` on every row, excluded from `search_code`, `<script>`/`<style>` dropped at the parse boundary |
 
-**The invariant that keeps `llm` off the untrusted rung:** the analyzer prompt is built from the
-class and method **signatures** — the declaration header, up to the body — so comments, string
-literals and method bodies never reach the model. That is what stops a Javadoc reading *"ignore
-previous instructions"* from being laundered into a note that later comes back through `search_code`
-looking like our own factual output. It is a property of `notes.build_prompt`, and it is exactly the
-kind of property a well-meaning change ("feed the bodies in, the notes will be richer") destroys
-without a single test failing — so `tests/test_notes.py` asserts it directly. The rollup tier is safe
-by construction: its inputs are the leaf notes, which are model output, never source text.
+**The invariant that keeps `llm` off the untrusted rung:** by default the analyzer prompt is built
+from the class and method **signatures** — the declaration header, up to the body — so comments,
+string literals and method bodies never reach the model. That is what stops a Javadoc reading
+*"ignore previous instructions"* from being laundered into a note that later comes back through
+`search_code` looking like our own factual output. It is a property of `notes.build_prompt`, and it
+is exactly the kind of property a well-meaning change ("feed the bodies in, the notes will be
+richer") destroys without a single test failing — so `tests/test_notes.py` asserts it directly, for
+the default.
+
+**The trusted-repo opt-in (`CODE_CONTEXT_NOTES_INCLUDE_BODIES`, default off):** the one sanctioned
+way to relax it. When set, `build_prompt` feeds the full method **bodies** to the analyzer, so notes
+describe real behavior — at the cost that comments/literals in the code now reach the model. This is
+sound only when the repo is trusted as much as the working tree the agent already reads (the `facts`
+rung): it moves `llm` onto the same footing as `facts`, no lower. It is deliberately *not* a silent
+default — `tests/test_notes.py` asserts **both** rungs (signatures-only when off, bodies when on), and
+`facts_key` carries the flag so flipping it re-generates every note rather than serving stale ones.
+Never enable it for a repo you would not let the agent's model read in full. The rollup tier is safe
+by construction either way: its inputs are the leaf notes, which are model output, never source text.
 
 ### Rules
 
@@ -408,7 +418,9 @@ by construction: its inputs are the leaf notes, which are model output, never so
   A change here that assumes the shell will sanitize our output is a change that assumes wrong.
 - **Outbound is deliberate, not incidental.** The analyzer tiers send *signatures and notes* — never
   the raw index, never whole files — to whichever engine the model string selects: local Ollama by
-  default, a company gateway (`openai:`), or Anthropic (`anthropic:`). Escalating a tier is a
+  default, a company gateway (`openai:`), or Anthropic (`anthropic:`). The trusted-repo opt-in
+  (`CODE_CONTEXT_NOTES_INCLUDE_BODIES`) widens that to *method bodies*, which is itself an explicit
+  decision about what code shape leaves the machine — the same class of choice as escalating a tier. Escalating a tier is a
   decision about **where a customer's code shape goes**, so it stays an explicit config change and
   the default stays local. `confluence-sync` is the only other outbound path, and it reads.
 - **Secrets never enter the object graph.** API keys are read from the environment at call time and

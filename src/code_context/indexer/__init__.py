@@ -27,7 +27,10 @@ from ..config import settings
 from . import docs, java, notes, rollup
 
 _SKIP_DIRS = ("/target/", "/build/", "/.git/", "/generated-sources/")
-_EMBED_BATCH = 64
+# Embed this many fragments per request. Kept modest for the constrained (CPU-only) dev box, where a
+# large batch of big class bodies spikes memory and 500s the engine. embeddings.embed() splits and
+# retries a batch that still fails, so this is a first-try tuning, not a correctness bound.
+_EMBED_BATCH = 32
 # Edge kinds the Java parser owns. ``index_repo`` replaces its whole edge set on every run, so it
 # must delete only these: ``mentions`` edges come from the docs pass, whose inputs it never read.
 _PARSER_EDGE_KINDS = ("calls", "imports", "contains")

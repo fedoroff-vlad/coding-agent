@@ -113,6 +113,7 @@ Phase-by-phase state: [`plans/roadmap.md`](plans/roadmap.md); slice-level detail
 - `src/code_context/migrations/` — raw-SQL schema migrations + [their own README](src/code_context/migrations/README.md)
   (the one rule that bites: a committed migration is never edited, comments included).
 - `infra/` — the dev pgvector container + the backup sidecar · `scripts/` — bootstrap, dev session,
+  the [refresh helper](scripts/restart-win.ps1) (restart containers + re-sync + migrate after a pull),
   the [work-machine quickstart](scripts/work-win.ps1) (infra + index + opencode wiring),
   model pulls, the golden runner, and the drift-lint CI step.
 - `tools/agent-skills/` — submodule of the portable dev-workflow skills; `work-win.ps1` installs
@@ -145,6 +146,12 @@ adds the ~19 GB local coder.
 ```
 
 A dev session = ollama + dev pgvector + uv env + schema, ready for `uv run code-context`.
+
+After a `git pull` that brings new migrations, dependencies or a changed compose file, refresh the
+running environment without a full re-bootstrap: `.\scripts\restart-win.ps1` restarts the containers,
+re-syncs the env and re-applies migrations (`-Clean` wipes the DB volume for a fresh index; `-Reindex
+<repo>` re-indexes after). It refreshes the infrastructure, not opencode's MCP child — a change to
+the server code is picked up by restarting opencode.
 
 ## Use it on a work machine (a company LLM + your own shell)
 

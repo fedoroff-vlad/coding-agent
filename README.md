@@ -120,10 +120,15 @@ Phase-by-phase state: [`plans/roadmap.md`](plans/roadmap.md); slice-level detail
 
 ## Set up a new machine
 
-Clone the repo, then one command installs everything (package manager + tools + apps + Python env + models).
+Clone the repo, then one command installs everything (package manager + tools + Python env + models).
 Idempotent and declarative — the toolset lives in [`Brewfile`](Brewfile) (macOS) / [`winget-packages.json`](winget-packages.json)
 (Windows), the models in `scripts/pull-models.*`. `SKIP_MODELS=1` (macOS) / `$env:SKIP_MODELS='1'` (Windows)
 installs tools only.
+
+The macOS Brewfile is the owner's full workstation (it also brings personal apps); the Windows set is
+**coding-agent essentials only** (git, gh, uv, ollama, docker, opencode, Claude Code). Windows also indexes
+rather than runs the coder, so `bootstrap-win.ps1` pulls only the embedding model by default — `$env:PULL_CODER='1'`
+adds the ~19 GB local coder.
 
 **macOS** (Homebrew):
 
@@ -135,7 +140,7 @@ installs tools only.
 **Windows** (winget):
 
 ```powershell
-.\scripts\bootstrap-win.ps1   # install everything
+.\scripts\bootstrap-win.ps1   # coding-agent tools + embedding model (coder runs on the Mac)
 .\scripts\start-win.ps1       # launch a dev session
 ```
 

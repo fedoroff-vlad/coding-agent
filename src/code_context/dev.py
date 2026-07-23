@@ -58,11 +58,15 @@ def index(repo_path: str) -> int:
     return 0
 
 
-def enrich(repo_path: str) -> int:
+def enrich(repo_path: str, subpath: str | None = None) -> int:
     from .indexer import enrich_repo
 
-    stats = enrich_repo(repo_path)
-    print(f"enrich ok: {stats} (notes model={settings.notes_model})")
+    # An optional subpath scopes the pass to one module/directory (a cheap trial before the whole
+    # repo) — the repo scope stays the root's name, so its notes join the same index, and pruning
+    # only touches the files actually scanned (never the rest of the repo's notes).
+    stats = enrich_repo(repo_path, subpath=subpath)
+    scope = f" [subpath={subpath}]" if subpath else ""
+    print(f"enrich ok: {stats} (notes model={settings.notes_model}){scope}")
     return 0
 
 

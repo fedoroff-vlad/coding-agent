@@ -50,6 +50,8 @@ From a fresh clone:
      `rollup` after `enrich`. Notes are built from **signatures only** by default; for a repo you
      trust as much as your own working tree, `CODE_CONTEXT_NOTES_INCLUDE_BODIES=1` feeds method
      bodies for richer notes (relaxes the signatures-only invariant — architecture.md §Security).
+     `enrich` takes an optional subpath — `dev enrich <repo> <module/dir>` — to scope a trial to one
+     module before paying for the whole repo (the repo scope stays the root, pruning only its files).
    - **`ingest` needs no model at all** (parse → embed → link), so the docs half runs comfortably on
      a CPU-only box. Pass the **code repo's name** as its second argument so docs and code share one
      scope — that is what lets `link` connect a rule to the class it governs. `ingest` links as its

@@ -33,6 +33,15 @@ class Settings(BaseSettings):
     notes_model: str = "qwen3-coder:30b"
     notes_num_ctx: int = 8192  # a leaf note sees one class' facts — RAG-first, no giant window.
     notes_timeout_s: int = 180
+    # Enrich normally builds the analyzer prompt from SIGNATURES ONLY — the invariant that keeps a
+    # hostile comment/body in an indexed repo from being laundered into a note (architecture.md
+    # §Security; tests/test_notes.py asserts it). Turn this ON only for a repo you trust as much as
+    # your own working tree: it feeds method BODIES (with their comments/literals) to the analyzer,
+    # so notes describe real behavior — richer, but the prompt is no longer attacker-free. Default
+    # OFF preserves the invariant; enabling it is the same trust the `facts` rung already assumes of
+    # the repo under work, just made explicit — and, like a tier escalation, an explicit decision
+    # about what code leaves the machine (bodies, not only signatures, reach the analyzer engine).
+    notes_include_bodies: bool = False
     # Rollup tier (C-4b): the directory→module→project notes synthesized bottom-up over the leaf
     # notes. The roadmap escalates this to a STRONG model (Opus) for cross-file reasoning: prefix
     # the model with "anthropic:" (e.g. anthropic:claude-opus-4-8) and llm.py routes the call to

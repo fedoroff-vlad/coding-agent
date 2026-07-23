@@ -9,16 +9,7 @@
 				{ "PackageIdentifier": "Ollama.Ollama" },
 				{ "PackageIdentifier": "Docker.DockerDesktop" },
 				{ "PackageIdentifier": "Anthropic.ClaudeCode" },
-				{ "PackageIdentifier": "SST.opencode" },
-				{ "PackageIdentifier": "Microsoft.VisualStudioCode" },
-				{ "PackageIdentifier": "JetBrains.PyCharm.Professional" },
-				{ "PackageIdentifier": "JetBrains.DataGrip" },
-				{ "PackageIdentifier": "Postman.Postman" },
-				{ "PackageIdentifier": "Google.Chrome" },
-				{ "PackageIdentifier": "Yandex.Browser" },
-				{ "PackageIdentifier": "Telegram.TelegramDesktop" },
-				{ "PackageIdentifier": "SublimeHQ.SublimeText.4" },
-				{ "PackageIdentifier": "WireGuard.WireGuard" }
+				{ "PackageIdentifier": "SST.opencode" }
 			],
 			"SourceDetails": {
 				"Argument": "https://cdn.winget.microsoft.com/cache",

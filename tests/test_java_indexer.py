@@ -48,6 +48,13 @@ def test_method_fragment_carries_its_body_and_lines():
     assert add.line_start == 12 and add.line_end == 14
 
 
+def test_class_fields_extracts_declarations_not_params_or_locals():
+    fields = java.class_fields(SRC)
+    assert fields["Foo"] == ["private int n;"]  # the field only
+    # the ctor param `int n` and any method locals are not field_declarations, so they don't appear
+    assert all("int a" not in f and "int b" not in f for f in fields["Foo"])
+
+
 def test_empty_source_yields_nothing():
     assert java.parse_source("") == []
 

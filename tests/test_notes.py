@@ -45,7 +45,8 @@ RECORD = "package a; public record Point(int x, int y) {}"
 
 
 def _unit(src: str, symbol: str) -> notes.ClassUnit:
-    return {u.cls.symbol: u for u in notes.class_units(java.parse_source(src))}[symbol]
+    units = notes.class_units(java.parse_source(src), java.class_fields(src))
+    return {u.cls.symbol: u for u in units}[symbol]
 
 
 def test_class_units_groups_methods_under_their_type():
@@ -85,6 +86,20 @@ def test_bodies_mode_feeds_method_implementations(monkeypatch):
     assert "return policy.apply(sum);" in prompt
     assert "InvoiceService(TaxPolicy policy)" not in prompt  # ctor still dropped (not substantive)
     assert prompt.rstrip().endswith("/no_think")
+
+
+def test_bodies_mode_includes_declared_fields(monkeypatch):
+    """Bodies mode also lists the class's declared state, so a note can name what it holds."""
+    monkeypatch.setattr(notes.settings, "notes_include_bodies", True)
+    prompt = notes.build_prompt(_unit(SERVICE, "InvoiceService"), "billing/InvoiceService.java")
+    assert "private final TaxPolicy policy;" in prompt
+
+
+def test_default_mode_omits_fields(monkeypatch):
+    """Fields are implementation detail — the signatures-only default must not carry them."""
+    monkeypatch.setattr(notes.settings, "notes_include_bodies", False)
+    prompt = notes.build_prompt(_unit(SERVICE, "InvoiceService"), "billing/InvoiceService.java")
+    assert "private final TaxPolicy policy;" not in prompt
 
 
 HOSTILE = """\
@@ -178,6 +193,21 @@ def test_facts_key_changes_when_the_bodies_flag_is_toggled(monkeypatch):
     on = notes.facts_key(_unit(SERVICE, "InvoiceService"))
     # Flipping the mode changes the output, so it must invalidate the cached notes (no stale serve).
     assert off != on
+
+
+def test_facts_key_tracks_field_changes_in_bodies_mode(monkeypatch):
+    monkeypatch.setattr(notes.settings, "notes_include_bodies", True)
+    a = notes.facts_key(_unit(SERVICE, "InvoiceService"))
+    dropped_final = SERVICE.replace("private final TaxPolicy policy;", "private TaxPolicy policy;")
+    # A field edit changes what the note is built from, so it must re-generate.
+    assert notes.facts_key(_unit(dropped_final, "InvoiceService")) != a
+
+
+def test_facts_key_ignores_field_changes_in_default_mode():
+    a = notes.facts_key(_unit(SERVICE, "InvoiceService"))
+    dropped_final = SERVICE.replace("private final TaxPolicy policy;", "private TaxPolicy policy;")
+    # Signatures-only mode never saw the field, so changing it must not churn the note.
+    assert notes.facts_key(_unit(dropped_final, "InvoiceService")) == a
 
 
 def test_note_markdown_carries_the_anchor():

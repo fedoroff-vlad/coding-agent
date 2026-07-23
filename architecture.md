@@ -396,8 +396,9 @@ richer") destroys without a single test failing — so `tests/test_notes.py` ass
 the default.
 
 **The trusted-repo opt-in (`CODE_CONTEXT_NOTES_INCLUDE_BODIES`, default off):** the one sanctioned
-way to relax it. When set, `build_prompt` feeds the full method **bodies** to the analyzer, so notes
-describe real behavior — at the cost that comments/literals in the code now reach the model. This is
+way to relax it. When set, `build_prompt` feeds the full method **bodies** and the class's **declared
+fields** to the analyzer, so notes describe real behavior and the state a class holds — at the cost
+that comments/literals in the code now reach the model. This is
 sound only when the repo is trusted as much as the working tree the agent already reads (the `facts`
 rung): it moves `llm` onto the same footing as `facts`, no lower. It is deliberately *not* a silent
 default — `tests/test_notes.py` asserts **both** rungs (signatures-only when off, bodies when on), and

@@ -122,7 +122,9 @@ def enrich_repo(
             text = f.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
-        units = notes.class_units(java.parse_source(text))
+        # Fields feed the note only in bodies mode (a trusted repo) — skip the extra parse otherwise.
+        fields = java.class_fields(text) if settings.notes_include_bodies else None
+        units = notes.class_units(java.parse_source(text), fields)
         stats["classes"] += len(units)
         seen[rel] = set()
         for unit in units:

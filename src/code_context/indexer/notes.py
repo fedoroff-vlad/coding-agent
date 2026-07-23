@@ -49,14 +49,24 @@ _SYSTEM_BODIES = (
 
 @dataclass(frozen=True)
 class ClassUnit:
-    """A class fragment plus its own method fragments — the input to one leaf note."""
+    """A class fragment plus its own method fragments — the input to one leaf note.
+
+    ``fields`` are the class's declared field texts (from :func:`java.class_fields`), used only in
+    bodies mode; empty in the default (signatures-only) path, so they never widen that prompt.
+    """
 
     cls: FragmentData
     methods: tuple[FragmentData, ...]
+    fields: tuple[str, ...] = ()
 
 
-def class_units(frags: list[FragmentData]) -> list[ClassUnit]:
-    """Group parser fragments into (class, its methods). Methods are matched by ``Type.method``."""
+def class_units(
+    frags: list[FragmentData], fields_by_type: dict[str, list[str]] | None = None
+) -> list[ClassUnit]:
+    """Group parser fragments into (class, its methods, its fields). Methods match by ``Type.method``;
+    fields come from :func:`java.class_fields`, keyed by the same simple type name (``None`` = no
+    fields, the signatures-only path)."""
+    fields_by_type = fields_by_type or {}
     classes = {f.symbol: f for f in frags if f.kind == "class"}
     methods: dict[str, list[FragmentData]] = {name: [] for name in classes}
     for f in frags:
@@ -64,7 +74,10 @@ def class_units(frags: list[FragmentData]) -> list[ClassUnit]:
             owner = f.symbol.rsplit(".", 1)[0]
             if owner in methods:
                 methods[owner].append(f)
-    return [ClassUnit(cls, tuple(methods[name])) for name, cls in classes.items()]
+    return [
+        ClassUnit(cls, tuple(methods[name]), tuple(fields_by_type.get(name, ())))
+        for name, cls in classes.items()
+    ]
 
 
 def _is_ctor(unit_symbol: str, method: FragmentData) -> bool:
@@ -106,13 +119,15 @@ def build_prompt(unit: ClassUnit, path: str) -> str:
     """
     methods = substantive_methods(unit)
     if settings.notes_include_bodies:
-        # Full method sources (bodies, comments, literals) — richer notes for a repo the operator
-        # trusts as much as its own working tree. The class header still frames it; fields are not
-        # yet parsed as facts, so they surface only through the bodies that use them.
+        # Full method sources (bodies, comments, literals) plus the class's declared fields — richer
+        # notes for a repo the operator trusts as much as its own working tree. The field list names
+        # the state the class holds (dependencies, configuration); the bodies show how it is used.
+        field_lines = "\n".join(f"- {fd}" for fd in unit.fields) or "- (none)"
         impl = "\n\n".join(m.content for m in methods) or "(no substantive methods)"
         return (
             f"Class: {unit.cls.signature}\n"
             f"File: {path}\n"
+            f"Fields:\n{field_lines}\n\n"
             f"Implementation:\n{impl}\n\n"
             "Write a note (4-8 sentences) covering: what this class is responsible for, how its key "
             "operations work, the important state/parameters it handles, and its collaborators/"
@@ -141,11 +156,15 @@ def facts_key(unit: ClassUnit) -> str:
     leaves stale notes in place:
     - the **model** — swapping analyzers must re-generate (keying on inputs alone made a swap skip);
     - **notes_include_bodies** — the mode changes the prompt, so flipping it must re-generate;
-    - the **inputs themselves** — method *signatures* in the default mode, method *bodies* when bodies
-      feed the note (so in bodies mode a body edit re-notes, where in signature mode it does not).
+    - the **inputs themselves** — method *signatures* in the default mode; method *bodies* **and the
+      declared fields** when bodies feed the note (so in bodies mode a body or field edit re-notes,
+      where in signature mode neither does).
     """
     methods = substantive_methods(unit)
-    facts = sorted(m.content if settings.notes_include_bodies else m.signature for m in methods)
+    if settings.notes_include_bodies:
+        facts = [*sorted(m.content for m in methods), *sorted(unit.fields)]
+    else:
+        facts = sorted(m.signature for m in methods)
     return "\n".join(
         [
             f"model={settings.notes_model}",

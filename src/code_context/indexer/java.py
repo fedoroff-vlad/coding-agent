@@ -103,6 +103,33 @@ def _signature(node, src: bytes) -> str:
     return " ".join(header.split())
 
 
+def class_fields(source: str) -> dict[str, list[str]]:
+    """Field declarations per type: simple type name → its collapsed field declaration texts.
+
+    A structural fact (declared state), not a fragment — it is not embedded or stored. Enrich folds
+    it into the note prompt in *bodies mode* (trusted repo), so a note can name the state a class
+    holds, not just its methods. Keyed by the simple type name, exactly like the type fragments'
+    symbols, so it lines up with :func:`code_context.indexer.notes.class_units`.
+    """
+    src = source.encode("utf-8")
+    out: dict[str, list[str]] = {}
+    _walk_fields(_PARSER.parse(src).root_node, src, enclosing=None, out=out)
+    return out
+
+
+def _walk_fields(node, src: bytes, enclosing: str | None, out: dict[str, list[str]]) -> None:
+    qualifier = enclosing
+    if node.type in _TYPE_KINDS:
+        name = _name(node, src)
+        if name:
+            qualifier = name  # fields below here belong to this type (nested types re-qualify)
+    elif node.type == "field_declaration" and enclosing:
+        text = " ".join(src[node.start_byte : node.end_byte].decode("utf-8", "replace").split())
+        out.setdefault(enclosing, []).append(text)
+    for child in node.children:
+        _walk_fields(child, src, qualifier, out)
+
+
 def parse_edges(source: str) -> list[EdgeData]:
     """Parse a Java file's relations (imports + calls). Pure — syntactic, no type resolution.
 
